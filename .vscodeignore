@@ -4,6 +4,7 @@ src/**
 .codex/**
 .specify/**
 specs/**
+scripts/**
 .git/**
 .gitignore
 .npmignore
@@ -18,3 +19,8 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+**/*.htk
+**/*.das
+keymap.yaml
+._*
+!out/**

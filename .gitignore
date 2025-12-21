@@ -53,3 +53,8 @@ temp/
 # Project-specific
 .codex/
 .specify/
+
+# Local generated artifacts
+._*
+output.htk
+keymap.yaml

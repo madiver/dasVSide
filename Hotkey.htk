@@ -1,0 +1,3422 @@
+Ctrl+Shift+Q:Cancel All:~ 1107:// ======================~0D~0A//  CANCEL ALL NON-S
+TOP ORDERS + DELETE TP ALERTS (CURRENT SYMBOL)~0D~0A
+// ======================~0D~0A~0D~0A// 0) Make sur
+e we're on Primary_OE and can read it~0D~0AFocusWin
+dow Primary_OE;~0D~0ACXL ALLSYMB;~0D~0A~0D~0A$M = G
+etWindowObj("Primary_OE");~0D~0Aif (!IsObj($M)) {~0D
+~0A    // If we can't access Primary_OE, we can't s
+afely infer symbol/position~0D~0A    return;~0D~0A}
+~0D~0A~0D~0A// Snapshot symbol and position BEFORE 
+we cancel orders~0D~0A$mySym   = $M.Symb;~0D~0A$pos
+Now  = $M.Pos;~0D~0A~0D~0A// LONG-ONLY: only rebuil
+d stop if we have a long position~0D~0Aif ($posNow 
+> 0 && $useAutoStop == "Yes" && $resetStopOnCancel 
+== "Yes") {~0D~0A    ExecHotkey("Set Auto Stop");~0D
+~0A}~0D~0A~0D~0A// Delete all TP alerts for this sy
+mbol over a reasonable R range~0D~0A// This matches
+ how the TP Alert Builder names them:~0D~0A// "TP "
+ + <factor> + "R Partial " + <symbol>~0D~0A~0D~0A$i
+ = 1;~0D~0A// i=1..20  ~E2~86~92 factors: 0.5, 1.0,
+ 1.5, ..., 10.0~0D~0Awhile ($i <= 20) {~0D~0A    $f
+ = ($i * 0.5);   // 0.5, 1, 1.5, 2, ...~0D~0A~0D~0A
+    $name = "TP " + $f + "R Partial " + $mySym;~0D~0A
+~0D~0A    $al = GetAlertObj($name);~0D~0A    if (Is
+Obj($al)) {~0D~0A        $al.Delete();~0D~0A    }~0D
+~0A~0D~0A    $i = $i + 1;~0D~0A}~0D~0A~0D~0Areturn;
+Alt+Ctrl+Q:GTFO:CXL ALL; FocusWindow Primary_OE; ROUTE="ARCAL"; TIF=DAY+; Price=Bid-0.50; Share=Pos; SELL=Send;~0D~0A
+Ctrl+Shift+1:Buy 10 Bid+ SL:~ 7428:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// Ice Breaker = 1
+/4 of normal share size~0D~0A$quarter = 50 * $qtyMu
+lt * 0.25;~0D~0A$scaled = $quarter + 2.5;~0D~0A$add
+Shares = $scaled - ($scaled % 5);~0D~0A~0D~0A// ---
+- Tunables ----~0D~0A$refPx             = BID;     
+        // BID or ASK~0D~0A$minDelayMs  = 1000;    
+       // throttle between order sends (ms)~0D~0A~0D
+~0A// ---- Max position size guard rail ----~0D~0Ai
+f ($maxPositionSize > 0) {    ~0D~0A    // Determin
+e current position in Primary_OE (fallback: Pos)~0D
+~0A    $curPos = 0;~0D~0A    if (IsObj($M)) {~0D~0A
+        $curPos = $M.Pos;~0D~0A    } else {~0D~0A  
+      $curPos = Pos;        // DAS built-in positio
+n for current symbol~0D~0A    }~0D~0A~0D~0A    // R
+emaining capacity before hitting the guard rail~0D~0A
+    $remaining = $maxPositionSize - $curPos;~0D~0A~0D
+~0A    // If we're already at / above max, do not a
+llow more size~0D~0A    if ($remaining <= 0) {~0D~0A
+        MsgBox("Max position size reached for " + S
+ymbol + ~0D~0A               " (" + $maxPositionSiz
+e + " shares). No additional size allowed.");~0D~0A
+        return;~0D~0A    }~0D~0A~0D~0A    // If thi
+s clip would exceed max size, clamp it down~0D~0A  
+  if ($addShares > $remaining) {~0D~0A        $addS
+hares = $remaining;~0D~0A    }~0D~0A~0D~0A}~0D~0A~0D
+~0A// ---- Tick-size Bands (no functions; simple if
+-else ladder) ----~0D~0A// We~E2~80~99ll resolve th
+e increment later using current prices.~0D~0A//   <
+ $0.25  -> 0.0005~0D~0A//   < $1.00  -> 0.001~0D~0A
+//   ~E2~89~A5 $1.00  -> 0.01~0D~0A~0D~0A// === 0) 
+Quote sanity & derived prices for safety check ===~0D
+~0A$bid    = BID;~0D~0A$ask    = ASK;~0D~0A$spread 
+= $ask - $bid;~0D~0A~0D~0Aif ($bid <= 0 || $ask <= 
+0 || $spread < 0) {~0D~0A    MsgBox("Quote sanity f
+ailed for " + Symbol + ": BID=" + $bid + " ASK=" + 
+$ask + ". Aborting.");~0D~0A    return;~0D~0A}~0D~0A
+~0D~0A// Projected entry/stop based on reference si
+de~0D~0A$pxEntry    = $refPx + $entryOffset;~0D~0A$
+hypoStop = $pxEntry - $stopLossTrigger;~0D~0A~0D~0A
+// ---- Resolve tick increment for safety checks (b
+ased on current context) ----~0D~0A$inc = 0.01;~0D~0A
+if ($pxEntry < 1 || $hypoStop < 1 || $bid < 1 || $a
+sk < 1)        { $inc = 0.001; }~0D~0Aif ($pxEntry 
+< 0.25 || $hypoStop < 0.25 || $bid < 0.25 || $ask <
+ 0.25) { $inc = 0.0005; }~0D~0A~0D~0A// === 1) Slip
+page-aware spread/stop safety (longs) ===~0D~0A$sto
+pVsBidFail = 0;~0D~0A~0D~0A// margin for safety = m
+ax(slipTicksMin * inc, slipSpreadFrac * spread)~0D~0A
+$slipMargin         = ($slipTicksMin * $inc);~0D~0A
+$slipSpreadPart  = ($slipSpreadFrac * $spread);~0D~0A
+if ($slipSpreadPart > $slipMargin) { $slipMargin = 
+$slipSpreadPart; }~0D~0A~0D~0Aif ($useSlippageMargi
+n == 1) {~0D~0A    // Require stop to be below (Bid
+ + margin)~0D~0A    if ($hypoStop >= ($bid + $slipM
+argin)) { $stopVsBidFail = 1; }~0D~0A} else {~0D~0A
+    if ($hypoStop >= $bid) { $stopVsBidFail = 1; }~0D
+~0A}~0D~0A~0D~0A// spread relative to stop distance
+ guard (tune threshold as desired)~0D~0A$spreadTooW
+ide = ($spread > ($stopLossTrigger * 0.75)) && $use
+SpreadCheck == 1;~0D~0A~0D~0A// If either fails, al
+ert and abort unless we are adding to an existing p
+osition~0D~0Aif (($stopVsBidFail == 1 || $spreadToo
+Wide == 1) && $posBefore <=0) {~0D~0A    $msg = "Sp
+read/Stop safety failed for " + Symbol + "\n" +~0D~0A
+           "Bid: " + $bid + "  Ask: " + $ask + "  S
+pread: " + $spread + "\n" +~0D~0A           "Planne
+d Entry: " + $pxEntry + "  Planned Stop: " + $hypoS
+top + "\n\n";~0D~0A    if ($stopVsBidFail == 1)  { 
+$msg = $msg + "- STOP_ABOVE_BID_WITH_MARGIN\n"; }~0D
+~0A    if ($spreadTooWide == 1)  { $msg = $msg + "-
+ SPREAD_TOO_WIDE vs stopOff\n"; }~0D~0A    MsgBox($
+msg + "\nAction aborted.");~0D~0A    return;~0D~0A}
+~0D~0A~0D~0A// Per-trade risk cap (projected risk =
+ stopLossTrigger * addShares)~0D~0Aif ($usePerTrade
+RiskCap == 1) {~0D~0A    $projRisk = $stopLossTrigg
+er * $addShares;~0D~0A    if ($projRisk > $riskCapD
+ollars) {~0D~0A        MsgBox("Risk cap exceeded fo
+r " + Symbol + ": projected $" + $projRisk + " > ca
+p $" + $riskCapDollars + ". Aborting.");~0D~0A     
+   return;~0D~0A    }~0D~0A}~0D~0A~0D~0A// === 2) C
+ancel only BUY working orders (keep existing protec
+tion until we actually fill) ===~0D~0A$acc = GetAcc
+ountObj(Account);~0D~0A$acc.CancelOrder("BUY", Symb
+ol, 0);~0D~0A~0D~0A// === 3) Build entry; snap entr
+y to increment to reduce rejects ===~0D~0A// Re-eva
+luate inc using pxEntry (some symbols jump bands)~0D
+~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 || $bid < 1 |
+| $ask < 1) { $inc = 0.001; }~0D~0Aif ($pxEntry < 0
+.25 || $bid < 0.25 || $ask < 0.25) { $inc = 0.0005;
+ }~0D~0A$pxEntry = Round($pxEntry, 102, $inc);~0D~0A
+~0D~0A$order = NewOrderObj();~0D~0A$order.Account =
+ Account;~0D~0A$order.Symbol  = Symbol;~0D~0A$order
+.Route   = "ARCA";~0D~0A$order.Tif     = "DAY+";~0D
+~0A$order.Side    = "B";      // Buy~0D~0A$order.Ty
+pe    = "L";      // Limit~0D~0A$order.Price   = $p
+xEntry;~0D~0A$order.Share   = $addShares;~0D~0A$ord
+er.Send();~0D~0A~0D~0A~0D~0A// === 4) Poll for fill
+ (break when criteria met) ===~0D~0A$i            =
+ 0;~0D~0A$filled      = 0;~0D~0A$filledQty = 0;~0D~0A
+while ($i < $maxPolls && $filled == 0) {~0D~0A    W
+ait($pollMs);~0D~0A    $order.GetInfo();           
+             // refresh order object~0D~0A    $fill
+edQty = $order.Share - $order.Open; // how many fil
+led so far~0D~0A    if ($order.Open == 0) {~0D~0A  
+      $filled = 1; // full fill~0D~0A        break;
+~0D~0A    }~0D~0A    if ($acceptPartial == 1 && $fi
+lledQty >= $minFillShares) {~0D~0A        $filled =
+ 2; // partial-accepted~0D~0A        break;~0D~0A  
+  }~0D~0A    $i = $i + 1;~0D~0A}~0D~0A~0D~0A// thro
+ttle between orders~0D~0A$elapsed = $i * $pollMs;~0D
+~0Aif ($elapsed < $minDelayMs) {~0D~0A    Wait($min
+DelayMs - $elapsed);~0D~0A}~0D~0A~0D~0A// === 5) If
+ no acceptable fill, cancel and exit (do not touch 
+existing stops) ===~0D~0Aif ($filled == 0) {~0D~0A 
+   $order.Cancel();~0D~0A    return;~0D~0A}~0D~0A~0D
+~0A// Optional: if we accepted a partial and want t
+o freeze size before arming stop~0D~0Aif ($filled =
+= 2 && $cancelRemainderOnPartial == 1) {~0D~0A    $
+order.Cancel();~0D~0A    // brief wait to let the r
+esidual cancel~0D~0A    Wait(200);~0D~0A}~0D~0A~0D~0A
+// === 6) Arm unified 1R stop via reusable ~E2~80~9C
+Set Auto Stop~E2~80~9D script ===~0D~0Aif ($useAuto
+Stop == "Yes") {~0D~0A    ExecHotKey("Set Auto Stop
+");   ~0D~0A}~0D~0A~0D~0A// == 7) Build and set tak
+e profit trigger (optional) ==~0D~0A// Only (re)bui
+ld TP if we are NOT already profitable on the exist
+ing position.~0D~0A// For longs, "profitable" means
+: BID > avgBefore on the position that existed~0D~0A
+// before this entry. If we're already green, do NO
+T reset TP.~0D~0Aif ($useTakeProfit == "Yes") {~0D~0A
+~0D~0A    // If no position beforehand, always set 
+TP (fresh trade)~0D~0A    if ($posBefore <= 0) {~0D
+~0A        ExecHotKey("Set Take Profit");~0D~0A    
+} else {~0D~0A        // We had a long position bef
+ore this add. Check profitability.~0D~0A        $bi
+dNow = BID;~0D~0A~0D~0A        // If avgBefore is i
+nvalid, be conservative and allow TP reset~0D~0A   
+     if ($avgBefore <= 0) {~0D~0A            ExecHo
+tKey("Set Take Profit");~0D~0A        } else {~0D~0A
+            // Only reset TP if NOT yet profitable 
+(bid <= avgBefore)~0D~0A            if ($bidNow <= 
+$avgBefore) {~0D~0A                ExecHotKey("Set 
+Take Profit");~0D~0A            }~0D~0A            
+// else: already profitable ~E2~86~92 do nothing, k
+eep existing TP~0D~0A        }~0D~0A    }~0D~0A}~0D
+~0A~0D~0A// --- End ---
+Ctrl+Shift+2:Buy 50 Bid+ SL:~ 7316:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 50 * $qtyMult;~0D~0A$refP
+x             = BID;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx + $entryOffset;~0D~0A$hypoStop = $pxEntry - $s
+topLossTrigger;~0D~0A~0D~0A// ---- Resolve tick inc
+rement for safety checks (based on current context)
+ ----~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 || $h
+ypoStop < 1 || $bid < 1 || $ask < 1)        { $inc 
+= 0.001; }~0D~0Aif ($pxEntry < 0.25 || $hypoStop < 
+0.25 || $bid < 0.25 || $ask < 0.25) { $inc = 0.0005
+; }~0D~0A~0D~0A// === 1) Slippage-aware spread/stop
+ safety (longs) ===~0D~0A$stopVsBidFail = 0;~0D~0A~0D
+~0A// margin for safety = max(slipTicksMin * inc, s
+lipSpreadFrac * spread)~0D~0A$slipMargin         = 
+($slipTicksMin * $inc);~0D~0A$slipSpreadPart  = ($s
+lipSpreadFrac * $spread);~0D~0Aif ($slipSpreadPart 
+> $slipMargin) { $slipMargin = $slipSpreadPart; }~0D
+~0A~0D~0Aif ($useSlippageMargin == 1) {~0D~0A    //
+ Require stop to be below (Bid + margin)~0D~0A    i
+f ($hypoStop >= ($bid + $slipMargin)) { $stopVsBidF
+ail = 1; }~0D~0A} else {~0D~0A    if ($hypoStop >= 
+$bid) { $stopVsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// 
+spread relative to stop distance guard (tune thresh
+old as desired)~0D~0A$spreadTooWide = ($spread > ($
+stopLossTrigger * 0.75)) && $useSpreadCheck == 1;~0D
+~0A~0D~0A// If either fails, alert and abort unless
+ we are adding to an existing position~0D~0Aif (($s
+topVsBidFail == 1 || $spreadTooWide == 1) && $posBe
+fore <=0) {~0D~0A    $msg = "Spread/Stop safety fai
+led for " + Symbol + "\n" +~0D~0A           "Bid: "
+ + $bid + "  Ask: " + $ask + "  Spread: " + $spread
+ + "\n" +~0D~0A           "Planned Entry: " + $pxEn
+try + "  Planned Stop: " + $hypoStop + "\n\n";~0D~0A
+    if ($stopVsBidFail == 1)  { $msg = $msg + "- ST
+OP_ABOVE_BID_WITH_MARGIN\n"; }~0D~0A    if ($spread
+TooWide == 1)  { $msg = $msg + "- SPREAD_TOO_WIDE v
+s stopOff\n"; }~0D~0A    MsgBox($msg + "\nAction ab
+orted.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Per
+-trade risk cap (projected risk = stopLossTrigger *
+ addShares)~0D~0Aif ($usePerTradeRiskCap == 1) {~0D
+~0A    $projRisk = $stopLossTrigger * $addShares;~0D
+~0A    if ($projRisk > $riskCapDollars) {~0D~0A    
+    MsgBox("Risk cap exceeded for " + Symbol + ": p
+rojected $" + $projRisk + " > cap $" + $riskCapDoll
+ars + ". Aborting.");~0D~0A        return;~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// === 2) Cancel only BUY work
+ing orders (keep existing protection until we actua
+lly fill) ===~0D~0A$acc = GetAccountObj(Account);~0D
+~0A$acc.CancelOrder("BUY", Symbol, 0);~0D~0A~0D~0A/
+/ === 3) Build entry; snap entry to increment to re
+duce rejects ===~0D~0A// Re-evaluate inc using pxEn
+try (some symbols jump bands)~0D~0A$inc = 0.01;~0D~0A
+if ($pxEntry < 1 || $bid < 1 || $ask < 1) { $inc = 
+0.001; }~0D~0Aif ($pxEntry < 0.25 || $bid < 0.25 ||
+ $ask < 0.25) { $inc = 0.0005; }~0D~0A$pxEntry = Ro
+und($pxEntry, 102, $inc);~0D~0A~0D~0A$order = NewOr
+derObj();~0D~0A$order.Account = Account;~0D~0A$orde
+r.Symbol  = Symbol;~0D~0A$order.Route   = "ARCA";~0D
+~0A$order.Tif     = "DAY+";~0D~0A$order.Side    = "
+B";      // Buy~0D~0A$order.Type    = "L";      // 
+Limit~0D~0A$order.Price   = $pxEntry;~0D~0A$order.S
+hare   = $addShares;~0D~0A$order.Send();~0D~0A~0D~0A
+~0D~0A// === 4) Poll for fill (break when criteria 
+met) ===~0D~0A$i            = 0;~0D~0A$filled      
+= 0;~0D~0A$filledQty = 0;~0D~0Awhile ($i < $maxPoll
+s && $filled == 0) {~0D~0A    Wait($pollMs);~0D~0A 
+   $order.GetInfo();                        // refr
+esh order object~0D~0A    $filledQty = $order.Share
+ - $order.Open; // how many filled so far~0D~0A    
+if ($order.Open == 0) {~0D~0A        $filled = 1; /
+/ full fill~0D~0A        break;~0D~0A    }~0D~0A   
+ if ($acceptPartial == 1 && $filledQty >= $minFillS
+hares) {~0D~0A        $filled = 2; // partial-accep
+ted~0D~0A        break;~0D~0A    }~0D~0A    $i = $i
+ + 1;~0D~0A}~0D~0A~0D~0A// throttle between orders~0D
+~0A$elapsed = $i * $pollMs;~0D~0Aif ($elapsed < $mi
+nDelayMs) {~0D~0A    Wait($minDelayMs - $elapsed);~0D
+~0A}~0D~0A~0D~0A// === 5) If no acceptable fill, ca
+ncel and exit (do not touch existing stops) ===~0D~0A
+if ($filled == 0) {~0D~0A    $order.Cancel();~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Optional: if we ac
+cepted a partial and want to freeze size before arm
+ing stop~0D~0Aif ($filled == 2 && $cancelRemainderO
+nPartial == 1) {~0D~0A    $order.Cancel();~0D~0A   
+ // brief wait to let the residual cancel~0D~0A    
+Wait(200);~0D~0A}~0D~0A~0D~0A// === 6) Arm unified 
+1R stop via reusable ~E2~80~9CSet Auto Stop~E2~80~9D
+ script ===~0D~0Aif ($useAutoStop == "Yes") {~0D~0A
+    ExecHotKey("Set Auto Stop");   ~0D~0A}~0D~0A~0D
+~0A// == 7) Build and set take profit trigger (opti
+onal) ==~0D~0A// Only (re)build TP if we are NOT al
+ready profitable on the existing position.~0D~0A// 
+For longs, "profitable" means: BID > avgBefore on t
+he position that existed~0D~0A// before this entry.
+ If we're already green, do NOT reset TP.~0D~0Aif (
+$useTakeProfit == "Yes") {~0D~0A~0D~0A    // If no 
+position beforehand, always set TP (fresh trade)~0D
+~0A    if ($posBefore <= 0) {~0D~0A        ExecHotK
+ey("Set Take Profit");~0D~0A    } else {~0D~0A     
+   // We had a long position before this add. Check
+ profitability.~0D~0A        $bidNow = BID;~0D~0A~0D
+~0A        // If avgBefore is invalid, be conservat
+ive and allow TP reset~0D~0A        if ($avgBefore 
+<= 0) {~0D~0A            ExecHotKey("Set Take Profi
+t");~0D~0A        } else {~0D~0A            // Only
+ reset TP if NOT yet profitable (bid <= avgBefore)~0D
+~0A            if ($bidNow <= $avgBefore) {~0D~0A  
+              ExecHotKey("Set Take Profit");~0D~0A 
+           }~0D~0A            // else: already prof
+itable ~E2~86~92 do nothing, keep existing TP~0D~0A
+        }~0D~0A    }~0D~0A}~0D~0A~0D~0A// --- End -
+--
+Ctrl+Shift+3:Buy 100 Bid+ SL:~ 7317:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 100 * $qtyMult;~0D~0A$ref
+Px             = BID;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx + $entryOffset;~0D~0A$hypoStop = $pxEntry - $s
+topLossTrigger;~0D~0A~0D~0A// ---- Resolve tick inc
+rement for safety checks (based on current context)
+ ----~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 || $h
+ypoStop < 1 || $bid < 1 || $ask < 1)        { $inc 
+= 0.001; }~0D~0Aif ($pxEntry < 0.25 || $hypoStop < 
+0.25 || $bid < 0.25 || $ask < 0.25) { $inc = 0.0005
+; }~0D~0A~0D~0A// === 1) Slippage-aware spread/stop
+ safety (longs) ===~0D~0A$stopVsBidFail = 0;~0D~0A~0D
+~0A// margin for safety = max(slipTicksMin * inc, s
+lipSpreadFrac * spread)~0D~0A$slipMargin         = 
+($slipTicksMin * $inc);~0D~0A$slipSpreadPart  = ($s
+lipSpreadFrac * $spread);~0D~0Aif ($slipSpreadPart 
+> $slipMargin) { $slipMargin = $slipSpreadPart; }~0D
+~0A~0D~0Aif ($useSlippageMargin == 1) {~0D~0A    //
+ Require stop to be below (Bid + margin)~0D~0A    i
+f ($hypoStop >= ($bid + $slipMargin)) { $stopVsBidF
+ail = 1; }~0D~0A} else {~0D~0A    if ($hypoStop >= 
+$bid) { $stopVsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// 
+spread relative to stop distance guard (tune thresh
+old as desired)~0D~0A$spreadTooWide = ($spread > ($
+stopLossTrigger * 0.75)) && $useSpreadCheck == 1;~0D
+~0A~0D~0A// If either fails, alert and abort unless
+ we are adding to an existing position~0D~0Aif (($s
+topVsBidFail == 1 || $spreadTooWide == 1) && $posBe
+fore <=0) {~0D~0A    $msg = "Spread/Stop safety fai
+led for " + Symbol + "\n" +~0D~0A           "Bid: "
+ + $bid + "  Ask: " + $ask + "  Spread: " + $spread
+ + "\n" +~0D~0A           "Planned Entry: " + $pxEn
+try + "  Planned Stop: " + $hypoStop + "\n\n";~0D~0A
+    if ($stopVsBidFail == 1)  { $msg = $msg + "- ST
+OP_ABOVE_BID_WITH_MARGIN\n"; }~0D~0A    if ($spread
+TooWide == 1)  { $msg = $msg + "- SPREAD_TOO_WIDE v
+s stopOff\n"; }~0D~0A    MsgBox($msg + "\nAction ab
+orted.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Per
+-trade risk cap (projected risk = stopLossTrigger *
+ addShares)~0D~0Aif ($usePerTradeRiskCap == 1) {~0D
+~0A    $projRisk = $stopLossTrigger * $addShares;~0D
+~0A    if ($projRisk > $riskCapDollars) {~0D~0A    
+    MsgBox("Risk cap exceeded for " + Symbol + ": p
+rojected $" + $projRisk + " > cap $" + $riskCapDoll
+ars + ". Aborting.");~0D~0A        return;~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// === 2) Cancel only BUY work
+ing orders (keep existing protection until we actua
+lly fill) ===~0D~0A$acc = GetAccountObj(Account);~0D
+~0A$acc.CancelOrder("BUY", Symbol, 0);~0D~0A~0D~0A/
+/ === 3) Build entry; snap entry to increment to re
+duce rejects ===~0D~0A// Re-evaluate inc using pxEn
+try (some symbols jump bands)~0D~0A$inc = 0.01;~0D~0A
+if ($pxEntry < 1 || $bid < 1 || $ask < 1) { $inc = 
+0.001; }~0D~0Aif ($pxEntry < 0.25 || $bid < 0.25 ||
+ $ask < 0.25) { $inc = 0.0005; }~0D~0A$pxEntry = Ro
+und($pxEntry, 102, $inc);~0D~0A~0D~0A$order = NewOr
+derObj();~0D~0A$order.Account = Account;~0D~0A$orde
+r.Symbol  = Symbol;~0D~0A$order.Route   = "ARCA";~0D
+~0A$order.Tif     = "DAY+";~0D~0A$order.Side    = "
+B";      // Buy~0D~0A$order.Type    = "L";      // 
+Limit~0D~0A$order.Price   = $pxEntry;~0D~0A$order.S
+hare   = $addShares;~0D~0A$order.Send();~0D~0A~0D~0A
+~0D~0A// === 4) Poll for fill (break when criteria 
+met) ===~0D~0A$i            = 0;~0D~0A$filled      
+= 0;~0D~0A$filledQty = 0;~0D~0Awhile ($i < $maxPoll
+s && $filled == 0) {~0D~0A    Wait($pollMs);~0D~0A 
+   $order.GetInfo();                        // refr
+esh order object~0D~0A    $filledQty = $order.Share
+ - $order.Open; // how many filled so far~0D~0A    
+if ($order.Open == 0) {~0D~0A        $filled = 1; /
+/ full fill~0D~0A        break;~0D~0A    }~0D~0A   
+ if ($acceptPartial == 1 && $filledQty >= $minFillS
+hares) {~0D~0A        $filled = 2; // partial-accep
+ted~0D~0A        break;~0D~0A    }~0D~0A    $i = $i
+ + 1;~0D~0A}~0D~0A~0D~0A// throttle between orders~0D
+~0A$elapsed = $i * $pollMs;~0D~0Aif ($elapsed < $mi
+nDelayMs) {~0D~0A    Wait($minDelayMs - $elapsed);~0D
+~0A}~0D~0A~0D~0A// === 5) If no acceptable fill, ca
+ncel and exit (do not touch existing stops) ===~0D~0A
+if ($filled == 0) {~0D~0A    $order.Cancel();~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Optional: if we ac
+cepted a partial and want to freeze size before arm
+ing stop~0D~0Aif ($filled == 2 && $cancelRemainderO
+nPartial == 1) {~0D~0A    $order.Cancel();~0D~0A   
+ // brief wait to let the residual cancel~0D~0A    
+Wait(200);~0D~0A}~0D~0A~0D~0A// === 6) Arm unified 
+1R stop via reusable ~E2~80~9CSet Auto Stop~E2~80~9D
+ script ===~0D~0Aif ($useAutoStop == "Yes") {~0D~0A
+    ExecHotKey("Set Auto Stop");   ~0D~0A}~0D~0A~0D
+~0A// == 7) Build and set take profit trigger (opti
+onal) ==~0D~0A// Only (re)build TP if we are NOT al
+ready profitable on the existing position.~0D~0A// 
+For longs, "profitable" means: BID > avgBefore on t
+he position that existed~0D~0A// before this entry.
+ If we're already green, do NOT reset TP.~0D~0Aif (
+$useTakeProfit == "Yes") {~0D~0A~0D~0A    // If no 
+position beforehand, always set TP (fresh trade)~0D
+~0A    if ($posBefore <= 0) {~0D~0A        ExecHotK
+ey("Set Take Profit");~0D~0A    } else {~0D~0A     
+   // We had a long position before this add. Check
+ profitability.~0D~0A        $bidNow = BID;~0D~0A~0D
+~0A        // If avgBefore is invalid, be conservat
+ive and allow TP reset~0D~0A        if ($avgBefore 
+<= 0) {~0D~0A            ExecHotKey("Set Take Profi
+t");~0D~0A        } else {~0D~0A            // Only
+ reset TP if NOT yet profitable (bid <= avgBefore)~0D
+~0A            if ($bidNow <= $avgBefore) {~0D~0A  
+              ExecHotKey("Set Take Profit");~0D~0A 
+           }~0D~0A            // else: already prof
+itable ~E2~86~92 do nothing, keep existing TP~0D~0A
+        }~0D~0A    }~0D~0A}~0D~0A~0D~0A// --- End -
+--
+Ctrl+Shift+4:Buy 150 Bid+ SL:~ 7317:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 150 * $qtyMult;~0D~0A$ref
+Px             = BID;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx + $entryOffset;~0D~0A$hypoStop = $pxEntry - $s
+topLossTrigger;~0D~0A~0D~0A// ---- Resolve tick inc
+rement for safety checks (based on current context)
+ ----~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 || $h
+ypoStop < 1 || $bid < 1 || $ask < 1)        { $inc 
+= 0.001; }~0D~0Aif ($pxEntry < 0.25 || $hypoStop < 
+0.25 || $bid < 0.25 || $ask < 0.25) { $inc = 0.0005
+; }~0D~0A~0D~0A// === 1) Slippage-aware spread/stop
+ safety (longs) ===~0D~0A$stopVsBidFail = 0;~0D~0A~0D
+~0A// margin for safety = max(slipTicksMin * inc, s
+lipSpreadFrac * spread)~0D~0A$slipMargin         = 
+($slipTicksMin * $inc);~0D~0A$slipSpreadPart  = ($s
+lipSpreadFrac * $spread);~0D~0Aif ($slipSpreadPart 
+> $slipMargin) { $slipMargin = $slipSpreadPart; }~0D
+~0A~0D~0Aif ($useSlippageMargin == 1) {~0D~0A    //
+ Require stop to be below (Bid + margin)~0D~0A    i
+f ($hypoStop >= ($bid + $slipMargin)) { $stopVsBidF
+ail = 1; }~0D~0A} else {~0D~0A    if ($hypoStop >= 
+$bid) { $stopVsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// 
+spread relative to stop distance guard (tune thresh
+old as desired)~0D~0A$spreadTooWide = ($spread > ($
+stopLossTrigger * 0.75)) && $useSpreadCheck == 1;~0D
+~0A~0D~0A// If either fails, alert and abort unless
+ we are adding to an existing position~0D~0Aif (($s
+topVsBidFail == 1 || $spreadTooWide == 1) && $posBe
+fore <=0) {~0D~0A    $msg = "Spread/Stop safety fai
+led for " + Symbol + "\n" +~0D~0A           "Bid: "
+ + $bid + "  Ask: " + $ask + "  Spread: " + $spread
+ + "\n" +~0D~0A           "Planned Entry: " + $pxEn
+try + "  Planned Stop: " + $hypoStop + "\n\n";~0D~0A
+    if ($stopVsBidFail == 1)  { $msg = $msg + "- ST
+OP_ABOVE_BID_WITH_MARGIN\n"; }~0D~0A    if ($spread
+TooWide == 1)  { $msg = $msg + "- SPREAD_TOO_WIDE v
+s stopOff\n"; }~0D~0A    MsgBox($msg + "\nAction ab
+orted.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Per
+-trade risk cap (projected risk = stopLossTrigger *
+ addShares)~0D~0Aif ($usePerTradeRiskCap == 1) {~0D
+~0A    $projRisk = $stopLossTrigger * $addShares;~0D
+~0A    if ($projRisk > $riskCapDollars) {~0D~0A    
+    MsgBox("Risk cap exceeded for " + Symbol + ": p
+rojected $" + $projRisk + " > cap $" + $riskCapDoll
+ars + ". Aborting.");~0D~0A        return;~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// === 2) Cancel only BUY work
+ing orders (keep existing protection until we actua
+lly fill) ===~0D~0A$acc = GetAccountObj(Account);~0D
+~0A$acc.CancelOrder("BUY", Symbol, 0);~0D~0A~0D~0A/
+/ === 3) Build entry; snap entry to increment to re
+duce rejects ===~0D~0A// Re-evaluate inc using pxEn
+try (some symbols jump bands)~0D~0A$inc = 0.01;~0D~0A
+if ($pxEntry < 1 || $bid < 1 || $ask < 1) { $inc = 
+0.001; }~0D~0Aif ($pxEntry < 0.25 || $bid < 0.25 ||
+ $ask < 0.25) { $inc = 0.0005; }~0D~0A$pxEntry = Ro
+und($pxEntry, 102, $inc);~0D~0A~0D~0A$order = NewOr
+derObj();~0D~0A$order.Account = Account;~0D~0A$orde
+r.Symbol  = Symbol;~0D~0A$order.Route   = "ARCA";~0D
+~0A$order.Tif     = "DAY+";~0D~0A$order.Side    = "
+B";      // Buy~0D~0A$order.Type    = "L";      // 
+Limit~0D~0A$order.Price   = $pxEntry;~0D~0A$order.S
+hare   = $addShares;~0D~0A$order.Send();~0D~0A~0D~0A
+~0D~0A// === 4) Poll for fill (break when criteria 
+met) ===~0D~0A$i            = 0;~0D~0A$filled      
+= 0;~0D~0A$filledQty = 0;~0D~0Awhile ($i < $maxPoll
+s && $filled == 0) {~0D~0A    Wait($pollMs);~0D~0A 
+   $order.GetInfo();                        // refr
+esh order object~0D~0A    $filledQty = $order.Share
+ - $order.Open; // how many filled so far~0D~0A    
+if ($order.Open == 0) {~0D~0A        $filled = 1; /
+/ full fill~0D~0A        break;~0D~0A    }~0D~0A   
+ if ($acceptPartial == 1 && $filledQty >= $minFillS
+hares) {~0D~0A        $filled = 2; // partial-accep
+ted~0D~0A        break;~0D~0A    }~0D~0A    $i = $i
+ + 1;~0D~0A}~0D~0A~0D~0A// throttle between orders~0D
+~0A$elapsed = $i * $pollMs;~0D~0Aif ($elapsed < $mi
+nDelayMs) {~0D~0A    Wait($minDelayMs - $elapsed);~0D
+~0A}~0D~0A~0D~0A// === 5) If no acceptable fill, ca
+ncel and exit (do not touch existing stops) ===~0D~0A
+if ($filled == 0) {~0D~0A    $order.Cancel();~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Optional: if we ac
+cepted a partial and want to freeze size before arm
+ing stop~0D~0Aif ($filled == 2 && $cancelRemainderO
+nPartial == 1) {~0D~0A    $order.Cancel();~0D~0A   
+ // brief wait to let the residual cancel~0D~0A    
+Wait(200);~0D~0A}~0D~0A~0D~0A// === 6) Arm unified 
+1R stop via reusable ~E2~80~9CSet Auto Stop~E2~80~9D
+ script ===~0D~0Aif ($useAutoStop == "Yes") {~0D~0A
+    ExecHotKey("Set Auto Stop");   ~0D~0A}~0D~0A~0D
+~0A// == 7) Build and set take profit trigger (opti
+onal) ==~0D~0A// Only (re)build TP if we are NOT al
+ready profitable on the existing position.~0D~0A// 
+For longs, "profitable" means: BID > avgBefore on t
+he position that existed~0D~0A// before this entry.
+ If we're already green, do NOT reset TP.~0D~0Aif (
+$useTakeProfit == "Yes") {~0D~0A~0D~0A    // If no 
+position beforehand, always set TP (fresh trade)~0D
+~0A    if ($posBefore <= 0) {~0D~0A        ExecHotK
+ey("Set Take Profit");~0D~0A    } else {~0D~0A     
+   // We had a long position before this add. Check
+ profitability.~0D~0A        $bidNow = BID;~0D~0A~0D
+~0A        // If avgBefore is invalid, be conservat
+ive and allow TP reset~0D~0A        if ($avgBefore 
+<= 0) {~0D~0A            ExecHotKey("Set Take Profi
+t");~0D~0A        } else {~0D~0A            // Only
+ reset TP if NOT yet profitable (bid <= avgBefore)~0D
+~0A            if ($bidNow <= $avgBefore) {~0D~0A  
+              ExecHotKey("Set Take Profit");~0D~0A 
+           }~0D~0A            // else: already prof
+itable ~E2~86~92 do nothing, keep existing TP~0D~0A
+        }~0D~0A    }~0D~0A}~0D~0A~0D~0A// --- End -
+--
+Alt+Ctrl+1:Buy 10 Bid SL:~ 7413:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// Ice Breaker = 1
+/4 of normal share size~0D~0A$quarter = 50 * $qtyMu
+lt * 0.25;~0D~0A$scaled = $quarter + 2.5;~0D~0A$add
+Shares = $scaled - ($scaled % 5);~0D~0A~0D~0A// ---
+- Tunables ----~0D~0A$refPx             = BID;     
+        // BID or ASK~0D~0A$minDelayMs  = 1000;    
+       // throttle between order sends (ms)~0D~0A~0D
+~0A// ---- Max position size guard rail ----~0D~0Ai
+f ($maxPositionSize > 0) {    ~0D~0A    // Determin
+e current position in Primary_OE (fallback: Pos)~0D
+~0A    $curPos = 0;~0D~0A    if (IsObj($M)) {~0D~0A
+        $curPos = $M.Pos;~0D~0A    } else {~0D~0A  
+      $curPos = Pos;        // DAS built-in positio
+n for current symbol~0D~0A    }~0D~0A~0D~0A    // R
+emaining capacity before hitting the guard rail~0D~0A
+    $remaining = $maxPositionSize - $curPos;~0D~0A~0D
+~0A    // If we're already at / above max, do not a
+llow more size~0D~0A    if ($remaining <= 0) {~0D~0A
+        MsgBox("Max position size reached for " + S
+ymbol + ~0D~0A               " (" + $maxPositionSiz
+e + " shares). No additional size allowed.");~0D~0A
+        return;~0D~0A    }~0D~0A~0D~0A    // If thi
+s clip would exceed max size, clamp it down~0D~0A  
+  if ($addShares > $remaining) {~0D~0A        $addS
+hares = $remaining;~0D~0A    }~0D~0A~0D~0A}~0D~0A~0D
+~0A// ---- Tick-size Bands (no functions; simple if
+-else ladder) ----~0D~0A// We~E2~80~99ll resolve th
+e increment later using current prices.~0D~0A//   <
+ $0.25  -> 0.0005~0D~0A//   < $1.00  -> 0.001~0D~0A
+//   ~E2~89~A5 $1.00  -> 0.01~0D~0A~0D~0A// === 0) 
+Quote sanity & derived prices for safety check ===~0D
+~0A$bid    = BID;~0D~0A$ask    = ASK;~0D~0A$spread 
+= $ask - $bid;~0D~0A~0D~0Aif ($bid <= 0 || $ask <= 
+0 || $spread < 0) {~0D~0A    MsgBox("Quote sanity f
+ailed for " + Symbol + ": BID=" + $bid + " ASK=" + 
+$ask + ". Aborting.");~0D~0A    return;~0D~0A}~0D~0A
+~0D~0A// Projected entry/stop based on reference si
+de~0D~0A$pxEntry    = $refPx;~0D~0A$hypoStop = $pxE
+ntry - $stopLossTrigger;~0D~0A~0D~0A// ---- Resolve
+ tick increment for safety checks (based on current
+ context) ----~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry 
+< 1 || $hypoStop < 1 || $bid < 1 || $ask < 1)      
+  { $inc = 0.001; }~0D~0Aif ($pxEntry < 0.25 || $hy
+poStop < 0.25 || $bid < 0.25 || $ask < 0.25) { $inc
+ = 0.0005; }~0D~0A~0D~0A// === 1) Slippage-aware sp
+read/stop safety (longs) ===~0D~0A$stopVsBidFail = 
+0;~0D~0A~0D~0A// margin for safety = max(slipTicksM
+in * inc, slipSpreadFrac * spread)~0D~0A$slipMargin
+         = ($slipTicksMin * $inc);~0D~0A$slipSpread
+Part  = ($slipSpreadFrac * $spread);~0D~0Aif ($slip
+SpreadPart > $slipMargin) { $slipMargin = $slipSpre
+adPart; }~0D~0A~0D~0Aif ($useSlippageMargin == 1) {
+~0D~0A    // Require stop to be below (Bid + margin
+)~0D~0A    if ($hypoStop >= ($bid + $slipMargin)) {
+ $stopVsBidFail = 1; }~0D~0A} else {~0D~0A    if ($
+hypoStop >= $bid) { $stopVsBidFail = 1; }~0D~0A}~0D
+~0A~0D~0A// spread relative to stop distance guard 
+(tune threshold as desired)~0D~0A$spreadTooWide = (
+$spread > ($stopLossTrigger * 0.75)) && $useSpreadC
+heck == 1;~0D~0A~0D~0A// If either fails, alert and
+ abort unless we are adding to an existing position
+~0D~0Aif (($stopVsBidFail == 1 || $spreadTooWide ==
+ 1) && $posBefore <=0) {~0D~0A    $msg = "Spread/St
+op safety failed for " + Symbol + "\n" +~0D~0A     
+      "Bid: " + $bid + "  Ask: " + $ask + "  Spread
+: " + $spread + "\n" +~0D~0A           "Planned Ent
+ry: " + $pxEntry + "  Planned Stop: " + $hypoStop +
+ "\n\n";~0D~0A    if ($stopVsBidFail == 1)  { $msg 
+= $msg + "- STOP_ABOVE_BID_WITH_MARGIN\n"; }~0D~0A 
+   if ($spreadTooWide == 1)  { $msg = $msg + "- SPR
+EAD_TOO_WIDE vs stopOff\n"; }~0D~0A    MsgBox($msg 
++ "\nAction aborted.");~0D~0A    return;~0D~0A}~0D~0A
+~0D~0A// Per-trade risk cap (projected risk = stopL
+ossTrigger * addShares)~0D~0Aif ($usePerTradeRiskCa
+p == 1) {~0D~0A    $projRisk = $stopLossTrigger * $
+addShares;~0D~0A    if ($projRisk > $riskCapDollars
+) {~0D~0A        MsgBox("Risk cap exceeded for " + 
+Symbol + ": projected $" + $projRisk + " > cap $" +
+ $riskCapDollars + ". Aborting.");~0D~0A        ret
+urn;~0D~0A    }~0D~0A}~0D~0A~0D~0A// === 2) Cancel 
+only BUY working orders (keep existing protection u
+ntil we actually fill) ===~0D~0A$acc = GetAccountOb
+j(Account);~0D~0A$acc.CancelOrder("BUY", Symbol, 0)
+;~0D~0A~0D~0A// === 3) Build entry; snap entry to i
+ncrement to reduce rejects ===~0D~0A// Re-evaluate 
+inc using pxEntry (some symbols jump bands)~0D~0A$i
+nc = 0.01;~0D~0Aif ($pxEntry < 1 || $bid < 1 || $as
+k < 1) { $inc = 0.001; }~0D~0Aif ($pxEntry < 0.25 |
+| $bid < 0.25 || $ask < 0.25) { $inc = 0.0005; }~0D
+~0A$pxEntry = Round($pxEntry, 102, $inc);~0D~0A~0D~0A
+$order = NewOrderObj();~0D~0A$order.Account = Accou
+nt;~0D~0A$order.Symbol  = Symbol;~0D~0A$order.Route
+   = "ARCA";~0D~0A$order.Tif     = "DAY+";~0D~0A$or
+der.Side    = "B";      // Buy~0D~0A$order.Type    
+= "L";      // Limit~0D~0A$order.Price   = $pxEntry
+;~0D~0A$order.Share   = $addShares;~0D~0A$order.Sen
+d();~0D~0A~0D~0A~0D~0A// === 4) Poll for fill (brea
+k when criteria met) ===~0D~0A$i            = 0;~0D
+~0A$filled      = 0;~0D~0A$filledQty = 0;~0D~0Awhil
+e ($i < $maxPolls && $filled == 0) {~0D~0A    Wait(
+$pollMs);~0D~0A    $order.GetInfo();               
+         // refresh order object~0D~0A    $filledQt
+y = $order.Share - $order.Open; // how many filled 
+so far~0D~0A    if ($order.Open == 0) {~0D~0A      
+  $filled = 1; // full fill~0D~0A        break;~0D~0A
+    }~0D~0A    if ($acceptPartial == 1 && $filledQt
+y >= $minFillShares) {~0D~0A        $filled = 2; //
+ partial-accepted~0D~0A        break;~0D~0A    }~0D
+~0A    $i = $i + 1;~0D~0A}~0D~0A~0D~0A// throttle b
+etween orders~0D~0A$elapsed = $i * $pollMs;~0D~0Aif
+ ($elapsed < $minDelayMs) {~0D~0A    Wait($minDelay
+Ms - $elapsed);~0D~0A}~0D~0A~0D~0A// === 5) If no a
+cceptable fill, cancel and exit (do not touch exist
+ing stops) ===~0D~0Aif ($filled == 0) {~0D~0A    $o
+rder.Cancel();~0D~0A    return;~0D~0A}~0D~0A~0D~0A/
+/ Optional: if we accepted a partial and want to fr
+eeze size before arming stop~0D~0Aif ($filled == 2 
+&& $cancelRemainderOnPartial == 1) {~0D~0A    $orde
+r.Cancel();~0D~0A    // brief wait to let the resid
+ual cancel~0D~0A    Wait(200);~0D~0A}~0D~0A~0D~0A//
+ === 6) Arm unified 1R stop via reusable ~E2~80~9CS
+et Auto Stop~E2~80~9D script ===~0D~0Aif ($useAutoS
+top == "Yes") {~0D~0A    ExecHotKey("Set Auto Stop"
+);   ~0D~0A}~0D~0A~0D~0A// == 7) Build and set take
+ profit trigger (optional) ==~0D~0A// Only (re)buil
+d TP if we are NOT already profitable on the existi
+ng position.~0D~0A// For longs, "profitable" means:
+ BID > avgBefore on the position that existed~0D~0A
+// before this entry. If we're already green, do NO
+T reset TP.~0D~0Aif ($useTakeProfit == "Yes") {~0D~0A
+~0D~0A    // If no position beforehand, always set 
+TP (fresh trade)~0D~0A    if ($posBefore <= 0) {~0D
+~0A        ExecHotKey("Set Take Profit");~0D~0A    
+} else {~0D~0A        // We had a long position bef
+ore this add. Check profitability.~0D~0A        $bi
+dNow = BID;~0D~0A~0D~0A        // If avgBefore is i
+nvalid, be conservative and allow TP reset~0D~0A   
+     if ($avgBefore <= 0) {~0D~0A            ExecHo
+tKey("Set Take Profit");~0D~0A        } else {~0D~0A
+            // Only reset TP if NOT yet profitable 
+(bid <= avgBefore)~0D~0A            if ($bidNow <= 
+$avgBefore) {~0D~0A                ExecHotKey("Set 
+Take Profit");~0D~0A            }~0D~0A            
+// else: already profitable ~E2~86~92 do nothing, k
+eep existing TP~0D~0A        }~0D~0A    }~0D~0A}~0D
+~0A~0D~0A// --- End ---
+Alt+Ctrl+2:Buy 50 Bid SL:~ 7301:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 50 * $qtyMult;~0D~0A$refP
+x             = BID;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx;~0D~0A$hypoStop = $pxEntry - $stopLossTrigger;
+~0D~0A~0D~0A// ---- Resolve tick increment for safe
+ty checks (based on current context) ----~0D~0A$inc
+ = 0.01;~0D~0Aif ($pxEntry < 1 || $hypoStop < 1 || 
+$bid < 1 || $ask < 1)        { $inc = 0.001; }~0D~0A
+if ($pxEntry < 0.25 || $hypoStop < 0.25 || $bid < 0
+.25 || $ask < 0.25) { $inc = 0.0005; }~0D~0A~0D~0A/
+/ === 1) Slippage-aware spread/stop safety (longs) 
+===~0D~0A$stopVsBidFail = 0;~0D~0A~0D~0A// margin f
+or safety = max(slipTicksMin * inc, slipSpreadFrac 
+* spread)~0D~0A$slipMargin         = ($slipTicksMin
+ * $inc);~0D~0A$slipSpreadPart  = ($slipSpreadFrac 
+* $spread);~0D~0Aif ($slipSpreadPart > $slipMargin)
+ { $slipMargin = $slipSpreadPart; }~0D~0A~0D~0Aif (
+$useSlippageMargin == 1) {~0D~0A    // Require stop
+ to be below (Bid + margin)~0D~0A    if ($hypoStop 
+>= ($bid + $slipMargin)) { $stopVsBidFail = 1; }~0D
+~0A} else {~0D~0A    if ($hypoStop >= $bid) { $stop
+VsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// spread relati
+ve to stop distance guard (tune threshold as desire
+d)~0D~0A$spreadTooWide = ($spread > ($stopLossTrigg
+er * 0.75)) && $useSpreadCheck == 1;~0D~0A~0D~0A// 
+If either fails, alert and abort unless we are addi
+ng to an existing position~0D~0Aif (($stopVsBidFail
+ == 1 || $spreadTooWide == 1) && $posBefore <=0) {~0D
+~0A    $msg = "Spread/Stop safety failed for " + Sy
+mbol + "\n" +~0D~0A           "Bid: " + $bid + "  A
+sk: " + $ask + "  Spread: " + $spread + "\n" +~0D~0A
+           "Planned Entry: " + $pxEntry + "  Planne
+d Stop: " + $hypoStop + "\n\n";~0D~0A    if ($stopV
+sBidFail == 1)  { $msg = $msg + "- STOP_ABOVE_BID_W
+ITH_MARGIN\n"; }~0D~0A    if ($spreadTooWide == 1) 
+ { $msg = $msg + "- SPREAD_TOO_WIDE vs stopOff\n"; 
+}~0D~0A    MsgBox($msg + "\nAction aborted.");~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Per-trade risk cap
+ (projected risk = stopLossTrigger * addShares)~0D~0A
+if ($usePerTradeRiskCap == 1) {~0D~0A    $projRisk 
+= $stopLossTrigger * $addShares;~0D~0A    if ($proj
+Risk > $riskCapDollars) {~0D~0A        MsgBox("Risk
+ cap exceeded for " + Symbol + ": projected $" + $p
+rojRisk + " > cap $" + $riskCapDollars + ". Abortin
+g.");~0D~0A        return;~0D~0A    }~0D~0A}~0D~0A~0D
+~0A// === 2) Cancel only BUY working orders (keep e
+xisting protection until we actually fill) ===~0D~0A
+$acc = GetAccountObj(Account);~0D~0A$acc.CancelOrde
+r("BUY", Symbol, 0);~0D~0A~0D~0A// === 3) Build ent
+ry; snap entry to increment to reduce rejects ===~0D
+~0A// Re-evaluate inc using pxEntry (some symbols j
+ump bands)~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 
+|| $bid < 1 || $ask < 1) { $inc = 0.001; }~0D~0Aif 
+($pxEntry < 0.25 || $bid < 0.25 || $ask < 0.25) { $
+inc = 0.0005; }~0D~0A$pxEntry = Round($pxEntry, 102
+, $inc);~0D~0A~0D~0A$order = NewOrderObj();~0D~0A$o
+rder.Account = Account;~0D~0A$order.Symbol  = Symbo
+l;~0D~0A$order.Route   = "ARCA";~0D~0A$order.Tif   
+  = "DAY+";~0D~0A$order.Side    = "B";      // Buy~0D
+~0A$order.Type    = "L";      // Limit~0D~0A$order.
+Price   = $pxEntry;~0D~0A$order.Share   = $addShare
+s;~0D~0A$order.Send();~0D~0A~0D~0A~0D~0A// === 4) P
+oll for fill (break when criteria met) ===~0D~0A$i 
+           = 0;~0D~0A$filled      = 0;~0D~0A$filled
+Qty = 0;~0D~0Awhile ($i < $maxPolls && $filled == 0
+) {~0D~0A    Wait($pollMs);~0D~0A    $order.GetInfo
+();                        // refresh order object~0D
+~0A    $filledQty = $order.Share - $order.Open; // 
+how many filled so far~0D~0A    if ($order.Open == 
+0) {~0D~0A        $filled = 1; // full fill~0D~0A  
+      break;~0D~0A    }~0D~0A    if ($acceptPartial
+ == 1 && $filledQty >= $minFillShares) {~0D~0A     
+   $filled = 2; // partial-accepted~0D~0A        br
+eak;~0D~0A    }~0D~0A    $i = $i + 1;~0D~0A}~0D~0A~0D
+~0A// throttle between orders~0D~0A$elapsed = $i * 
+$pollMs;~0D~0Aif ($elapsed < $minDelayMs) {~0D~0A  
+  Wait($minDelayMs - $elapsed);~0D~0A}~0D~0A~0D~0A/
+/ === 5) If no acceptable fill, cancel and exit (do
+ not touch existing stops) ===~0D~0Aif ($filled == 
+0) {~0D~0A    $order.Cancel();~0D~0A    return;~0D~0A
+}~0D~0A~0D~0A// Optional: if we accepted a partial 
+and want to freeze size before arming stop~0D~0Aif 
+($filled == 2 && $cancelRemainderOnPartial == 1) {~0D
+~0A    $order.Cancel();~0D~0A    // brief wait to l
+et the residual cancel~0D~0A    Wait(200);~0D~0A}~0D
+~0A~0D~0A// === 6) Arm unified 1R stop via reusable
+ ~E2~80~9CSet Auto Stop~E2~80~9D script ===~0D~0Aif
+ ($useAutoStop == "Yes") {~0D~0A    ExecHotKey("Set
+ Auto Stop");   ~0D~0A}~0D~0A~0D~0A// == 7) Build a
+nd set take profit trigger (optional) ==~0D~0A// On
+ly (re)build TP if we are NOT already profitable on
+ the existing position.~0D~0A// For longs, "profita
+ble" means: BID > avgBefore on the position that ex
+isted~0D~0A// before this entry. If we're already g
+reen, do NOT reset TP.~0D~0Aif ($useTakeProfit == "
+Yes") {~0D~0A~0D~0A    // If no position beforehand
+, always set TP (fresh trade)~0D~0A    if ($posBefo
+re <= 0) {~0D~0A        ExecHotKey("Set Take Profit
+");~0D~0A    } else {~0D~0A        // We had a long
+ position before this add. Check profitability.~0D~0A
+        $bidNow = BID;~0D~0A~0D~0A        // If avg
+Before is invalid, be conservative and allow TP res
+et~0D~0A        if ($avgBefore <= 0) {~0D~0A       
+     ExecHotKey("Set Take Profit");~0D~0A        } 
+else {~0D~0A            // Only reset TP if NOT yet
+ profitable (bid <= avgBefore)~0D~0A            if 
+($bidNow <= $avgBefore) {~0D~0A                Exec
+HotKey("Set Take Profit");~0D~0A            }~0D~0A
+            // else: already profitable ~E2~86~92 d
+o nothing, keep existing TP~0D~0A        }~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// --- End ---
+Alt+Ctrl+3:Buy 100 Bid SL:~ 7302:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 100 * $qtyMult;~0D~0A$ref
+Px             = BID;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx;~0D~0A$hypoStop = $pxEntry - $stopLossTrigger;
+~0D~0A~0D~0A// ---- Resolve tick increment for safe
+ty checks (based on current context) ----~0D~0A$inc
+ = 0.01;~0D~0Aif ($pxEntry < 1 || $hypoStop < 1 || 
+$bid < 1 || $ask < 1)        { $inc = 0.001; }~0D~0A
+if ($pxEntry < 0.25 || $hypoStop < 0.25 || $bid < 0
+.25 || $ask < 0.25) { $inc = 0.0005; }~0D~0A~0D~0A/
+/ === 1) Slippage-aware spread/stop safety (longs) 
+===~0D~0A$stopVsBidFail = 0;~0D~0A~0D~0A// margin f
+or safety = max(slipTicksMin * inc, slipSpreadFrac 
+* spread)~0D~0A$slipMargin         = ($slipTicksMin
+ * $inc);~0D~0A$slipSpreadPart  = ($slipSpreadFrac 
+* $spread);~0D~0Aif ($slipSpreadPart > $slipMargin)
+ { $slipMargin = $slipSpreadPart; }~0D~0A~0D~0Aif (
+$useSlippageMargin == 1) {~0D~0A    // Require stop
+ to be below (Bid + margin)~0D~0A    if ($hypoStop 
+>= ($bid + $slipMargin)) { $stopVsBidFail = 1; }~0D
+~0A} else {~0D~0A    if ($hypoStop >= $bid) { $stop
+VsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// spread relati
+ve to stop distance guard (tune threshold as desire
+d)~0D~0A$spreadTooWide = ($spread > ($stopLossTrigg
+er * 0.75)) && $useSpreadCheck == 1;~0D~0A~0D~0A// 
+If either fails, alert and abort unless we are addi
+ng to an existing position~0D~0Aif (($stopVsBidFail
+ == 1 || $spreadTooWide == 1) && $posBefore <=0) {~0D
+~0A    $msg = "Spread/Stop safety failed for " + Sy
+mbol + "\n" +~0D~0A           "Bid: " + $bid + "  A
+sk: " + $ask + "  Spread: " + $spread + "\n" +~0D~0A
+           "Planned Entry: " + $pxEntry + "  Planne
+d Stop: " + $hypoStop + "\n\n";~0D~0A    if ($stopV
+sBidFail == 1)  { $msg = $msg + "- STOP_ABOVE_BID_W
+ITH_MARGIN\n"; }~0D~0A    if ($spreadTooWide == 1) 
+ { $msg = $msg + "- SPREAD_TOO_WIDE vs stopOff\n"; 
+}~0D~0A    MsgBox($msg + "\nAction aborted.");~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Per-trade risk cap
+ (projected risk = stopLossTrigger * addShares)~0D~0A
+if ($usePerTradeRiskCap == 1) {~0D~0A    $projRisk 
+= $stopLossTrigger * $addShares;~0D~0A    if ($proj
+Risk > $riskCapDollars) {~0D~0A        MsgBox("Risk
+ cap exceeded for " + Symbol + ": projected $" + $p
+rojRisk + " > cap $" + $riskCapDollars + ". Abortin
+g.");~0D~0A        return;~0D~0A    }~0D~0A}~0D~0A~0D
+~0A// === 2) Cancel only BUY working orders (keep e
+xisting protection until we actually fill) ===~0D~0A
+$acc = GetAccountObj(Account);~0D~0A$acc.CancelOrde
+r("BUY", Symbol, 0);~0D~0A~0D~0A// === 3) Build ent
+ry; snap entry to increment to reduce rejects ===~0D
+~0A// Re-evaluate inc using pxEntry (some symbols j
+ump bands)~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 
+|| $bid < 1 || $ask < 1) { $inc = 0.001; }~0D~0Aif 
+($pxEntry < 0.25 || $bid < 0.25 || $ask < 0.25) { $
+inc = 0.0005; }~0D~0A$pxEntry = Round($pxEntry, 102
+, $inc);~0D~0A~0D~0A$order = NewOrderObj();~0D~0A$o
+rder.Account = Account;~0D~0A$order.Symbol  = Symbo
+l;~0D~0A$order.Route   = "ARCA";~0D~0A$order.Tif   
+  = "DAY+";~0D~0A$order.Side    = "B";      // Buy~0D
+~0A$order.Type    = "L";      // Limit~0D~0A$order.
+Price   = $pxEntry;~0D~0A$order.Share   = $addShare
+s;~0D~0A$order.Send();~0D~0A~0D~0A~0D~0A// === 4) P
+oll for fill (break when criteria met) ===~0D~0A$i 
+           = 0;~0D~0A$filled      = 0;~0D~0A$filled
+Qty = 0;~0D~0Awhile ($i < $maxPolls && $filled == 0
+) {~0D~0A    Wait($pollMs);~0D~0A    $order.GetInfo
+();                        // refresh order object~0D
+~0A    $filledQty = $order.Share - $order.Open; // 
+how many filled so far~0D~0A    if ($order.Open == 
+0) {~0D~0A        $filled = 1; // full fill~0D~0A  
+      break;~0D~0A    }~0D~0A    if ($acceptPartial
+ == 1 && $filledQty >= $minFillShares) {~0D~0A     
+   $filled = 2; // partial-accepted~0D~0A        br
+eak;~0D~0A    }~0D~0A    $i = $i + 1;~0D~0A}~0D~0A~0D
+~0A// throttle between orders~0D~0A$elapsed = $i * 
+$pollMs;~0D~0Aif ($elapsed < $minDelayMs) {~0D~0A  
+  Wait($minDelayMs - $elapsed);~0D~0A}~0D~0A~0D~0A/
+/ === 5) If no acceptable fill, cancel and exit (do
+ not touch existing stops) ===~0D~0Aif ($filled == 
+0) {~0D~0A    $order.Cancel();~0D~0A    return;~0D~0A
+}~0D~0A~0D~0A// Optional: if we accepted a partial 
+and want to freeze size before arming stop~0D~0Aif 
+($filled == 2 && $cancelRemainderOnPartial == 1) {~0D
+~0A    $order.Cancel();~0D~0A    // brief wait to l
+et the residual cancel~0D~0A    Wait(200);~0D~0A}~0D
+~0A~0D~0A// === 6) Arm unified 1R stop via reusable
+ ~E2~80~9CSet Auto Stop~E2~80~9D script ===~0D~0Aif
+ ($useAutoStop == "Yes") {~0D~0A    ExecHotKey("Set
+ Auto Stop");   ~0D~0A}~0D~0A~0D~0A// == 7) Build a
+nd set take profit trigger (optional) ==~0D~0A// On
+ly (re)build TP if we are NOT already profitable on
+ the existing position.~0D~0A// For longs, "profita
+ble" means: BID > avgBefore on the position that ex
+isted~0D~0A// before this entry. If we're already g
+reen, do NOT reset TP.~0D~0Aif ($useTakeProfit == "
+Yes") {~0D~0A~0D~0A    // If no position beforehand
+, always set TP (fresh trade)~0D~0A    if ($posBefo
+re <= 0) {~0D~0A        ExecHotKey("Set Take Profit
+");~0D~0A    } else {~0D~0A        // We had a long
+ position before this add. Check profitability.~0D~0A
+        $bidNow = BID;~0D~0A~0D~0A        // If avg
+Before is invalid, be conservative and allow TP res
+et~0D~0A        if ($avgBefore <= 0) {~0D~0A       
+     ExecHotKey("Set Take Profit");~0D~0A        } 
+else {~0D~0A            // Only reset TP if NOT yet
+ profitable (bid <= avgBefore)~0D~0A            if 
+($bidNow <= $avgBefore) {~0D~0A                Exec
+HotKey("Set Take Profit");~0D~0A            }~0D~0A
+            // else: already profitable ~E2~86~92 d
+o nothing, keep existing TP~0D~0A        }~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// --- End ---
+Alt+Ctrl+4:Buy 150 Bid SL:~ 7302:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 150 * $qtyMult;~0D~0A$ref
+Px             = BID;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx;~0D~0A$hypoStop = $pxEntry - $stopLossTrigger;
+~0D~0A~0D~0A// ---- Resolve tick increment for safe
+ty checks (based on current context) ----~0D~0A$inc
+ = 0.01;~0D~0Aif ($pxEntry < 1 || $hypoStop < 1 || 
+$bid < 1 || $ask < 1)        { $inc = 0.001; }~0D~0A
+if ($pxEntry < 0.25 || $hypoStop < 0.25 || $bid < 0
+.25 || $ask < 0.25) { $inc = 0.0005; }~0D~0A~0D~0A/
+/ === 1) Slippage-aware spread/stop safety (longs) 
+===~0D~0A$stopVsBidFail = 0;~0D~0A~0D~0A// margin f
+or safety = max(slipTicksMin * inc, slipSpreadFrac 
+* spread)~0D~0A$slipMargin         = ($slipTicksMin
+ * $inc);~0D~0A$slipSpreadPart  = ($slipSpreadFrac 
+* $spread);~0D~0Aif ($slipSpreadPart > $slipMargin)
+ { $slipMargin = $slipSpreadPart; }~0D~0A~0D~0Aif (
+$useSlippageMargin == 1) {~0D~0A    // Require stop
+ to be below (Bid + margin)~0D~0A    if ($hypoStop 
+>= ($bid + $slipMargin)) { $stopVsBidFail = 1; }~0D
+~0A} else {~0D~0A    if ($hypoStop >= $bid) { $stop
+VsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// spread relati
+ve to stop distance guard (tune threshold as desire
+d)~0D~0A$spreadTooWide = ($spread > ($stopLossTrigg
+er * 0.75)) && $useSpreadCheck == 1;~0D~0A~0D~0A// 
+If either fails, alert and abort unless we are addi
+ng to an existing position~0D~0Aif (($stopVsBidFail
+ == 1 || $spreadTooWide == 1) && $posBefore <=0) {~0D
+~0A    $msg = "Spread/Stop safety failed for " + Sy
+mbol + "\n" +~0D~0A           "Bid: " + $bid + "  A
+sk: " + $ask + "  Spread: " + $spread + "\n" +~0D~0A
+           "Planned Entry: " + $pxEntry + "  Planne
+d Stop: " + $hypoStop + "\n\n";~0D~0A    if ($stopV
+sBidFail == 1)  { $msg = $msg + "- STOP_ABOVE_BID_W
+ITH_MARGIN\n"; }~0D~0A    if ($spreadTooWide == 1) 
+ { $msg = $msg + "- SPREAD_TOO_WIDE vs stopOff\n"; 
+}~0D~0A    MsgBox($msg + "\nAction aborted.");~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Per-trade risk cap
+ (projected risk = stopLossTrigger * addShares)~0D~0A
+if ($usePerTradeRiskCap == 1) {~0D~0A    $projRisk 
+= $stopLossTrigger * $addShares;~0D~0A    if ($proj
+Risk > $riskCapDollars) {~0D~0A        MsgBox("Risk
+ cap exceeded for " + Symbol + ": projected $" + $p
+rojRisk + " > cap $" + $riskCapDollars + ". Abortin
+g.");~0D~0A        return;~0D~0A    }~0D~0A}~0D~0A~0D
+~0A// === 2) Cancel only BUY working orders (keep e
+xisting protection until we actually fill) ===~0D~0A
+$acc = GetAccountObj(Account);~0D~0A$acc.CancelOrde
+r("BUY", Symbol, 0);~0D~0A~0D~0A// === 3) Build ent
+ry; snap entry to increment to reduce rejects ===~0D
+~0A// Re-evaluate inc using pxEntry (some symbols j
+ump bands)~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 
+|| $bid < 1 || $ask < 1) { $inc = 0.001; }~0D~0Aif 
+($pxEntry < 0.25 || $bid < 0.25 || $ask < 0.25) { $
+inc = 0.0005; }~0D~0A$pxEntry = Round($pxEntry, 102
+, $inc);~0D~0A~0D~0A$order = NewOrderObj();~0D~0A$o
+rder.Account = Account;~0D~0A$order.Symbol  = Symbo
+l;~0D~0A$order.Route   = "ARCA";~0D~0A$order.Tif   
+  = "DAY+";~0D~0A$order.Side    = "B";      // Buy~0D
+~0A$order.Type    = "L";      // Limit~0D~0A$order.
+Price   = $pxEntry;~0D~0A$order.Share   = $addShare
+s;~0D~0A$order.Send();~0D~0A~0D~0A~0D~0A// === 4) P
+oll for fill (break when criteria met) ===~0D~0A$i 
+           = 0;~0D~0A$filled      = 0;~0D~0A$filled
+Qty = 0;~0D~0Awhile ($i < $maxPolls && $filled == 0
+) {~0D~0A    Wait($pollMs);~0D~0A    $order.GetInfo
+();                        // refresh order object~0D
+~0A    $filledQty = $order.Share - $order.Open; // 
+how many filled so far~0D~0A    if ($order.Open == 
+0) {~0D~0A        $filled = 1; // full fill~0D~0A  
+      break;~0D~0A    }~0D~0A    if ($acceptPartial
+ == 1 && $filledQty >= $minFillShares) {~0D~0A     
+   $filled = 2; // partial-accepted~0D~0A        br
+eak;~0D~0A    }~0D~0A    $i = $i + 1;~0D~0A}~0D~0A~0D
+~0A// throttle between orders~0D~0A$elapsed = $i * 
+$pollMs;~0D~0Aif ($elapsed < $minDelayMs) {~0D~0A  
+  Wait($minDelayMs - $elapsed);~0D~0A}~0D~0A~0D~0A/
+/ === 5) If no acceptable fill, cancel and exit (do
+ not touch existing stops) ===~0D~0Aif ($filled == 
+0) {~0D~0A    $order.Cancel();~0D~0A    return;~0D~0A
+}~0D~0A~0D~0A// Optional: if we accepted a partial 
+and want to freeze size before arming stop~0D~0Aif 
+($filled == 2 && $cancelRemainderOnPartial == 1) {~0D
+~0A    $order.Cancel();~0D~0A    // brief wait to l
+et the residual cancel~0D~0A    Wait(200);~0D~0A}~0D
+~0A~0D~0A// === 6) Arm unified 1R stop via reusable
+ ~E2~80~9CSet Auto Stop~E2~80~9D script ===~0D~0Aif
+ ($useAutoStop == "Yes") {~0D~0A    ExecHotKey("Set
+ Auto Stop");   ~0D~0A}~0D~0A~0D~0A// == 7) Build a
+nd set take profit trigger (optional) ==~0D~0A// On
+ly (re)build TP if we are NOT already profitable on
+ the existing position.~0D~0A// For longs, "profita
+ble" means: BID > avgBefore on the position that ex
+isted~0D~0A// before this entry. If we're already g
+reen, do NOT reset TP.~0D~0Aif ($useTakeProfit == "
+Yes") {~0D~0A~0D~0A    // If no position beforehand
+, always set TP (fresh trade)~0D~0A    if ($posBefo
+re <= 0) {~0D~0A        ExecHotKey("Set Take Profit
+");~0D~0A    } else {~0D~0A        // We had a long
+ position before this add. Check profitability.~0D~0A
+        $bidNow = BID;~0D~0A~0D~0A        // If avg
+Before is invalid, be conservative and allow TP res
+et~0D~0A        if ($avgBefore <= 0) {~0D~0A       
+     ExecHotKey("Set Take Profit");~0D~0A        } 
+else {~0D~0A            // Only reset TP if NOT yet
+ profitable (bid <= avgBefore)~0D~0A            if 
+($bidNow <= $avgBefore) {~0D~0A                Exec
+HotKey("Set Take Profit");~0D~0A            }~0D~0A
+            // else: already profitable ~E2~86~92 d
+o nothing, keep existing TP~0D~0A        }~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// --- End ---
+Ctrl+Shift+S:Set Auto Stop:~ 4405:// =====================~0D~0A//  SET AUTO STOP (1R
+, LONG ONLY)~0D~0A// =====================~0D~0A//~0D
+~0A// Reusable stop-loss engine~0D~0A// - Uses STOP
+LOSS_TRIGGER global (1R in dollars)~0D~0A// - Uses 
+ENTRY_REF_PX (optional) as fallback if AvgCost is l
+agging~0D~0A// - Honors USE_AUTO_STOP global~0D~0A/
+/ - Uses Primary_OE montage object (no global Symbo
+l/Account dependency)~0D~0A// - Places a unified SL
+P stop for current symbol/account~0D~0A//~0D~0A~0D~0A
+FocusWindow Primary_OE;~0D~0A~0D~0A// 1) Get Primar
+y_OE montage object~0D~0A$M = GetWindowObj("Primary
+_OE");~0D~0Aif (!IsObj($M)) {~0D~0A    MsgBox("Set 
+Auto Stop: montage 'Primary_OE' not found. Aborting
+.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Pull con
+text from montage object~0D~0A$myAcc  = $M.Account;
+~0D~0A$mySym  = $M.Symb;~0D~0A$posNow = $M.Pos;~0D~0A
+$avgNow = $M.AvgCost;~0D~0A~0D~0A// LONG-ONLY: if n
+o long position, nothing to protect~0D~0Aif ($posNo
+w <= 0) {~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Try
+ to let AvgCost populate if it's lagging~0D~0A$j = 
+0;~0D~0Awhile ($posNow > 0 && $avgNow <= 0 && $j < 
+10) {~0D~0A    Wait(50);~0D~0A    $avgNow = $M.AvgC
+ost;~0D~0A    $j = $j + 1;~0D~0A}~0D~0A~0D~0A// Sea
+tbelt: if still no AvgCost but we do have size, anc
+hor to entry ref if available~0D~0Aif ($posNow > 0 
+&& $avgNow <= 0) {~0D~0A    if ($entryRefPx > 0) {~0D
+~0A        $avgNow = $entryRefPx;~0D~0A    } else {
+~0D~0A        $avgNow = $M.Last;   // last fallback
+ from montage~0D~0A    }~0D~0A}~0D~0A~0D~0Aif ($pos
+Now <= 0 || $avgNow <= 0) {~0D~0A    // something i
+s very off; abort rather than arm bad stop~0D~0A   
+ return;~0D~0A}~0D~0A~0D~0A// 2) Tunables specific 
+to STOP behavior~0D~0A// TODO~0D~0A$useAdaptiveLimi
+tOff  = 1;     // 1=offset based on spread; 0=use f
+ixed $limitOff~0D~0A$adapt_k              = 2.0;   
+// limit offset = max(minTicks*inc, min(maxLimitOff
+, k*spread))~0D~0A$adapt_minTicks       = 2;     //
+ min ticks for stop-limit offset~0D~0A$adapt_maxLim
+itOff    = 0.25;  // hard cap in dollars on limit o
+ffset~0D~0A$verifyStopPosted     = 1;     // 1=read
+ back stop and verify; retry once; then fallback to
+ SL~0D~0A~0D~0A// 3) Cancel existing SELL-side work
+ing orders~0D~0A$accObj = GetAccountObj($myAcc);~0D
+~0A$accObj.CancelOrder("SELL", $mySym, 0);~0D~0A~0D
+~0A// Let cancels register; avoid races~0D~0AWait(3
+50);~0D~0A~0D~0A// 4) Compute raw 1R stop~0D~0A$sto
+p = $avgNow - $stopLossTrigger;~0D~0A~0D~0A// 5) Re
+solve tick-size bands for stop/limit and snapping~0D
+~0A$inc = 0.01;~0D~0Aif ($avgNow < 1 || $stop < 1) 
+       { $inc = 0.001; }~0D~0Aif ($avgNow < 0.25 ||
+ $stop < 0.25)  { $inc = 0.0005; }~0D~0A~0D~0A$stop
+ = Round($stop, 102, $inc);~0D~0A~0D~0A// 6) Adapti
+ve stop-limit offset~0D~0A$effLimitOff = $exitOffse
+t;~0D~0Aif ($useAdaptiveLimitOff == 1) {~0D~0A    /
+/ Use montage-level quotes, not globals~0D~0A    $s
+preadNow   = $M.Ask - $M.Bid;~0D~0A    $effLimitOff
+ = ($adapt_k * $spreadNow);~0D~0A    // floor to mi
+n ticks~0D~0A    $minOff = ($adapt_minTicks * $inc)
+;~0D~0A    if ($effLimitOff < $minOff)            {
+ $effLimitOff = $minOff; }~0D~0A    // cap~0D~0A   
+ if ($effLimitOff > $adapt_maxLimitOff) { $effLimit
+Off = $adapt_maxLimitOff; }~0D~0A}~0D~0A~0D~0A// Co
+mpute and snap limit~0D~0A$px = $stop - $effLimitOf
+f;~0D~0A$px = Round($px, 102, $inc);~0D~0A~0D~0A// 
+Safety: ensure SLP limit is strictly below trigger 
+(for sells)~0D~0Aif ($px >= $stop) {~0D~0A    $px =
+ Round($stop - $inc, 102, $inc);~0D~0A}~0D~0A~0D~0A
+// 7) Build & send unified SLP stop~0D~0A$qtyProtec
+t = Round($posNow, 0);~0D~0Aif ($qtyProtect <= 0) {
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A$s = NewOrderOb
+j();~0D~0A$s.Account    = $myAcc;~0D~0A$s.Symbol   
+  = $mySym;~0D~0A$s.Route       = "STOP";~0D~0A$s.T
+if            = "DAY+";~0D~0A$s.Side         = "S";
+~0D~0A$s.Type         = "SLP";        // Stop-Limit
+ (P)~0D~0A$s.StopPrice = $stop;~0D~0A$s.Price      
+  = $px;~0D~0A$s.Share       = $qtyProtect;  // pro
+tect entire current position~0D~0A$s.Send();~0D~0A~0D
+~0A// small settle to register~0D~0AWait(200);~0D~0A
+~0D~0A// 8) Verify stop posted (optional)~0D~0Aif (
+$verifyStopPosted == 1) {~0D~0A    $s.GetInfo();   
+// refresh object if supported~0D~0A    $ok = 1;~0D
+~0A~0D~0A    if ($s.StopPrice != $stop)      { $ok 
+= 0; }~0D~0A    if ($s.Price     != $px)        { $
+ok = 0; }~0D~0A    if ($s.Share     != $qtyProtect)
+{ $ok = 0; }~0D~0A~0D~0A    if ($ok == 0) {~0D~0A  
+      // retry once after a brief backoff~0D~0A    
+    Wait(300);~0D~0A        $s.Send();~0D~0A       
+ Wait(200);~0D~0A        $s.GetInfo();~0D~0A~0D~0A 
+       $ok = 1;~0D~0A        if ($s.StopPrice != $s
+top)      { $ok = 0; }~0D~0A        if ($s.Price   
+  != $px)        { $ok = 0; }~0D~0A        if ($s.S
+hare     != $qtyProtect){ $ok = 0; }~0D~0A~0D~0A   
+     // If still not OK, fallback to plain SL~0D~0A
+        if ($ok == 0) {~0D~0A            $s.Type = 
+"SL";~0D~0A            $s.Send();~0D~0A            
+MsgBox("Set Auto Stop: verification failed for " + 
+$mySym + ". Fallback SL sent.");~0D~0A        }~0D~0A
+    }~0D~0A}~0D~0A~0D~0A// --- End Set Auto Stop --
+-
+Alt+Shift+1:Buy 10 Ask SL:~ 7413:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// Ice Breaker = 1
+/4 of normal share size~0D~0A$quarter = 50 * $qtyMu
+lt * 0.25;~0D~0A$scaled = $quarter + 2.5;~0D~0A$add
+Shares = $scaled - ($scaled % 5);~0D~0A~0D~0A// ---
+- Tunables ----~0D~0A$refPx             = ASK;     
+        // BID or ASK~0D~0A$minDelayMs  = 1000;    
+       // throttle between order sends (ms)~0D~0A~0D
+~0A// ---- Max position size guard rail ----~0D~0Ai
+f ($maxPositionSize > 0) {    ~0D~0A    // Determin
+e current position in Primary_OE (fallback: Pos)~0D
+~0A    $curPos = 0;~0D~0A    if (IsObj($M)) {~0D~0A
+        $curPos = $M.Pos;~0D~0A    } else {~0D~0A  
+      $curPos = Pos;        // DAS built-in positio
+n for current symbol~0D~0A    }~0D~0A~0D~0A    // R
+emaining capacity before hitting the guard rail~0D~0A
+    $remaining = $maxPositionSize - $curPos;~0D~0A~0D
+~0A    // If we're already at / above max, do not a
+llow more size~0D~0A    if ($remaining <= 0) {~0D~0A
+        MsgBox("Max position size reached for " + S
+ymbol + ~0D~0A               " (" + $maxPositionSiz
+e + " shares). No additional size allowed.");~0D~0A
+        return;~0D~0A    }~0D~0A~0D~0A    // If thi
+s clip would exceed max size, clamp it down~0D~0A  
+  if ($addShares > $remaining) {~0D~0A        $addS
+hares = $remaining;~0D~0A    }~0D~0A~0D~0A}~0D~0A~0D
+~0A// ---- Tick-size Bands (no functions; simple if
+-else ladder) ----~0D~0A// We~E2~80~99ll resolve th
+e increment later using current prices.~0D~0A//   <
+ $0.25  -> 0.0005~0D~0A//   < $1.00  -> 0.001~0D~0A
+//   ~E2~89~A5 $1.00  -> 0.01~0D~0A~0D~0A// === 0) 
+Quote sanity & derived prices for safety check ===~0D
+~0A$bid    = BID;~0D~0A$ask    = ASK;~0D~0A$spread 
+= $ask - $bid;~0D~0A~0D~0Aif ($bid <= 0 || $ask <= 
+0 || $spread < 0) {~0D~0A    MsgBox("Quote sanity f
+ailed for " + Symbol + ": BID=" + $bid + " ASK=" + 
+$ask + ". Aborting.");~0D~0A    return;~0D~0A}~0D~0A
+~0D~0A// Projected entry/stop based on reference si
+de~0D~0A$pxEntry    = $refPx;~0D~0A$hypoStop = $pxE
+ntry - $stopLossTrigger;~0D~0A~0D~0A// ---- Resolve
+ tick increment for safety checks (based on current
+ context) ----~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry 
+< 1 || $hypoStop < 1 || $bid < 1 || $ask < 1)      
+  { $inc = 0.001; }~0D~0Aif ($pxEntry < 0.25 || $hy
+poStop < 0.25 || $bid < 0.25 || $ask < 0.25) { $inc
+ = 0.0005; }~0D~0A~0D~0A// === 1) Slippage-aware sp
+read/stop safety (longs) ===~0D~0A$stopVsBidFail = 
+0;~0D~0A~0D~0A// margin for safety = max(slipTicksM
+in * inc, slipSpreadFrac * spread)~0D~0A$slipMargin
+         = ($slipTicksMin * $inc);~0D~0A$slipSpread
+Part  = ($slipSpreadFrac * $spread);~0D~0Aif ($slip
+SpreadPart > $slipMargin) { $slipMargin = $slipSpre
+adPart; }~0D~0A~0D~0Aif ($useSlippageMargin == 1) {
+~0D~0A    // Require stop to be below (Bid + margin
+)~0D~0A    if ($hypoStop >= ($bid + $slipMargin)) {
+ $stopVsBidFail = 1; }~0D~0A} else {~0D~0A    if ($
+hypoStop >= $bid) { $stopVsBidFail = 1; }~0D~0A}~0D
+~0A~0D~0A// spread relative to stop distance guard 
+(tune threshold as desired)~0D~0A$spreadTooWide = (
+$spread > ($stopLossTrigger * 0.75)) && $useSpreadC
+heck == 1;~0D~0A~0D~0A// If either fails, alert and
+ abort unless we are adding to an existing position
+~0D~0Aif (($stopVsBidFail == 1 || $spreadTooWide ==
+ 1) && $posBefore <=0) {~0D~0A    $msg = "Spread/St
+op safety failed for " + Symbol + "\n" +~0D~0A     
+      "Bid: " + $bid + "  Ask: " + $ask + "  Spread
+: " + $spread + "\n" +~0D~0A           "Planned Ent
+ry: " + $pxEntry + "  Planned Stop: " + $hypoStop +
+ "\n\n";~0D~0A    if ($stopVsBidFail == 1)  { $msg 
+= $msg + "- STOP_ABOVE_BID_WITH_MARGIN\n"; }~0D~0A 
+   if ($spreadTooWide == 1)  { $msg = $msg + "- SPR
+EAD_TOO_WIDE vs stopOff\n"; }~0D~0A    MsgBox($msg 
++ "\nAction aborted.");~0D~0A    return;~0D~0A}~0D~0A
+~0D~0A// Per-trade risk cap (projected risk = stopL
+ossTrigger * addShares)~0D~0Aif ($usePerTradeRiskCa
+p == 1) {~0D~0A    $projRisk = $stopLossTrigger * $
+addShares;~0D~0A    if ($projRisk > $riskCapDollars
+) {~0D~0A        MsgBox("Risk cap exceeded for " + 
+Symbol + ": projected $" + $projRisk + " > cap $" +
+ $riskCapDollars + ". Aborting.");~0D~0A        ret
+urn;~0D~0A    }~0D~0A}~0D~0A~0D~0A// === 2) Cancel 
+only BUY working orders (keep existing protection u
+ntil we actually fill) ===~0D~0A$acc = GetAccountOb
+j(Account);~0D~0A$acc.CancelOrder("BUY", Symbol, 0)
+;~0D~0A~0D~0A// === 3) Build entry; snap entry to i
+ncrement to reduce rejects ===~0D~0A// Re-evaluate 
+inc using pxEntry (some symbols jump bands)~0D~0A$i
+nc = 0.01;~0D~0Aif ($pxEntry < 1 || $bid < 1 || $as
+k < 1) { $inc = 0.001; }~0D~0Aif ($pxEntry < 0.25 |
+| $bid < 0.25 || $ask < 0.25) { $inc = 0.0005; }~0D
+~0A$pxEntry = Round($pxEntry, 102, $inc);~0D~0A~0D~0A
+$order = NewOrderObj();~0D~0A$order.Account = Accou
+nt;~0D~0A$order.Symbol  = Symbol;~0D~0A$order.Route
+   = "ARCA";~0D~0A$order.Tif     = "DAY+";~0D~0A$or
+der.Side    = "B";      // Buy~0D~0A$order.Type    
+= "L";      // Limit~0D~0A$order.Price   = $pxEntry
+;~0D~0A$order.Share   = $addShares;~0D~0A$order.Sen
+d();~0D~0A~0D~0A~0D~0A// === 4) Poll for fill (brea
+k when criteria met) ===~0D~0A$i            = 0;~0D
+~0A$filled      = 0;~0D~0A$filledQty = 0;~0D~0Awhil
+e ($i < $maxPolls && $filled == 0) {~0D~0A    Wait(
+$pollMs);~0D~0A    $order.GetInfo();               
+         // refresh order object~0D~0A    $filledQt
+y = $order.Share - $order.Open; // how many filled 
+so far~0D~0A    if ($order.Open == 0) {~0D~0A      
+  $filled = 1; // full fill~0D~0A        break;~0D~0A
+    }~0D~0A    if ($acceptPartial == 1 && $filledQt
+y >= $minFillShares) {~0D~0A        $filled = 2; //
+ partial-accepted~0D~0A        break;~0D~0A    }~0D
+~0A    $i = $i + 1;~0D~0A}~0D~0A~0D~0A// throttle b
+etween orders~0D~0A$elapsed = $i * $pollMs;~0D~0Aif
+ ($elapsed < $minDelayMs) {~0D~0A    Wait($minDelay
+Ms - $elapsed);~0D~0A}~0D~0A~0D~0A// === 5) If no a
+cceptable fill, cancel and exit (do not touch exist
+ing stops) ===~0D~0Aif ($filled == 0) {~0D~0A    $o
+rder.Cancel();~0D~0A    return;~0D~0A}~0D~0A~0D~0A/
+/ Optional: if we accepted a partial and want to fr
+eeze size before arming stop~0D~0Aif ($filled == 2 
+&& $cancelRemainderOnPartial == 1) {~0D~0A    $orde
+r.Cancel();~0D~0A    // brief wait to let the resid
+ual cancel~0D~0A    Wait(200);~0D~0A}~0D~0A~0D~0A//
+ === 6) Arm unified 1R stop via reusable ~E2~80~9CS
+et Auto Stop~E2~80~9D script ===~0D~0Aif ($useAutoS
+top == "Yes") {~0D~0A    ExecHotKey("Set Auto Stop"
+);   ~0D~0A}~0D~0A~0D~0A// == 7) Build and set take
+ profit trigger (optional) ==~0D~0A// Only (re)buil
+d TP if we are NOT already profitable on the existi
+ng position.~0D~0A// For longs, "profitable" means:
+ BID > avgBefore on the position that existed~0D~0A
+// before this entry. If we're already green, do NO
+T reset TP.~0D~0Aif ($useTakeProfit == "Yes") {~0D~0A
+~0D~0A    // If no position beforehand, always set 
+TP (fresh trade)~0D~0A    if ($posBefore <= 0) {~0D
+~0A        ExecHotKey("Set Take Profit");~0D~0A    
+} else {~0D~0A        // We had a long position bef
+ore this add. Check profitability.~0D~0A        $bi
+dNow = BID;~0D~0A~0D~0A        // If avgBefore is i
+nvalid, be conservative and allow TP reset~0D~0A   
+     if ($avgBefore <= 0) {~0D~0A            ExecHo
+tKey("Set Take Profit");~0D~0A        } else {~0D~0A
+            // Only reset TP if NOT yet profitable 
+(bid <= avgBefore)~0D~0A            if ($bidNow <= 
+$avgBefore) {~0D~0A                ExecHotKey("Set 
+Take Profit");~0D~0A            }~0D~0A            
+// else: already profitable ~E2~86~92 do nothing, k
+eep existing TP~0D~0A        }~0D~0A    }~0D~0A}~0D
+~0A~0D~0A// --- End ---
+Alt+Shift+2:Buy 50 Ask SL:~ 7301:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 50 * $qtyMult;~0D~0A$refP
+x             = ASK;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx;~0D~0A$hypoStop = $pxEntry - $stopLossTrigger;
+~0D~0A~0D~0A// ---- Resolve tick increment for safe
+ty checks (based on current context) ----~0D~0A$inc
+ = 0.01;~0D~0Aif ($pxEntry < 1 || $hypoStop < 1 || 
+$bid < 1 || $ask < 1)        { $inc = 0.001; }~0D~0A
+if ($pxEntry < 0.25 || $hypoStop < 0.25 || $bid < 0
+.25 || $ask < 0.25) { $inc = 0.0005; }~0D~0A~0D~0A/
+/ === 1) Slippage-aware spread/stop safety (longs) 
+===~0D~0A$stopVsBidFail = 0;~0D~0A~0D~0A// margin f
+or safety = max(slipTicksMin * inc, slipSpreadFrac 
+* spread)~0D~0A$slipMargin         = ($slipTicksMin
+ * $inc);~0D~0A$slipSpreadPart  = ($slipSpreadFrac 
+* $spread);~0D~0Aif ($slipSpreadPart > $slipMargin)
+ { $slipMargin = $slipSpreadPart; }~0D~0A~0D~0Aif (
+$useSlippageMargin == 1) {~0D~0A    // Require stop
+ to be below (Bid + margin)~0D~0A    if ($hypoStop 
+>= ($bid + $slipMargin)) { $stopVsBidFail = 1; }~0D
+~0A} else {~0D~0A    if ($hypoStop >= $bid) { $stop
+VsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// spread relati
+ve to stop distance guard (tune threshold as desire
+d)~0D~0A$spreadTooWide = ($spread > ($stopLossTrigg
+er * 0.75)) && $useSpreadCheck == 1;~0D~0A~0D~0A// 
+If either fails, alert and abort unless we are addi
+ng to an existing position~0D~0Aif (($stopVsBidFail
+ == 1 || $spreadTooWide == 1) && $posBefore <=0) {~0D
+~0A    $msg = "Spread/Stop safety failed for " + Sy
+mbol + "\n" +~0D~0A           "Bid: " + $bid + "  A
+sk: " + $ask + "  Spread: " + $spread + "\n" +~0D~0A
+           "Planned Entry: " + $pxEntry + "  Planne
+d Stop: " + $hypoStop + "\n\n";~0D~0A    if ($stopV
+sBidFail == 1)  { $msg = $msg + "- STOP_ABOVE_BID_W
+ITH_MARGIN\n"; }~0D~0A    if ($spreadTooWide == 1) 
+ { $msg = $msg + "- SPREAD_TOO_WIDE vs stopOff\n"; 
+}~0D~0A    MsgBox($msg + "\nAction aborted.");~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Per-trade risk cap
+ (projected risk = stopLossTrigger * addShares)~0D~0A
+if ($usePerTradeRiskCap == 1) {~0D~0A    $projRisk 
+= $stopLossTrigger * $addShares;~0D~0A    if ($proj
+Risk > $riskCapDollars) {~0D~0A        MsgBox("Risk
+ cap exceeded for " + Symbol + ": projected $" + $p
+rojRisk + " > cap $" + $riskCapDollars + ". Abortin
+g.");~0D~0A        return;~0D~0A    }~0D~0A}~0D~0A~0D
+~0A// === 2) Cancel only BUY working orders (keep e
+xisting protection until we actually fill) ===~0D~0A
+$acc = GetAccountObj(Account);~0D~0A$acc.CancelOrde
+r("BUY", Symbol, 0);~0D~0A~0D~0A// === 3) Build ent
+ry; snap entry to increment to reduce rejects ===~0D
+~0A// Re-evaluate inc using pxEntry (some symbols j
+ump bands)~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 
+|| $bid < 1 || $ask < 1) { $inc = 0.001; }~0D~0Aif 
+($pxEntry < 0.25 || $bid < 0.25 || $ask < 0.25) { $
+inc = 0.0005; }~0D~0A$pxEntry = Round($pxEntry, 102
+, $inc);~0D~0A~0D~0A$order = NewOrderObj();~0D~0A$o
+rder.Account = Account;~0D~0A$order.Symbol  = Symbo
+l;~0D~0A$order.Route   = "ARCA";~0D~0A$order.Tif   
+  = "DAY+";~0D~0A$order.Side    = "B";      // Buy~0D
+~0A$order.Type    = "L";      // Limit~0D~0A$order.
+Price   = $pxEntry;~0D~0A$order.Share   = $addShare
+s;~0D~0A$order.Send();~0D~0A~0D~0A~0D~0A// === 4) P
+oll for fill (break when criteria met) ===~0D~0A$i 
+           = 0;~0D~0A$filled      = 0;~0D~0A$filled
+Qty = 0;~0D~0Awhile ($i < $maxPolls && $filled == 0
+) {~0D~0A    Wait($pollMs);~0D~0A    $order.GetInfo
+();                        // refresh order object~0D
+~0A    $filledQty = $order.Share - $order.Open; // 
+how many filled so far~0D~0A    if ($order.Open == 
+0) {~0D~0A        $filled = 1; // full fill~0D~0A  
+      break;~0D~0A    }~0D~0A    if ($acceptPartial
+ == 1 && $filledQty >= $minFillShares) {~0D~0A     
+   $filled = 2; // partial-accepted~0D~0A        br
+eak;~0D~0A    }~0D~0A    $i = $i + 1;~0D~0A}~0D~0A~0D
+~0A// throttle between orders~0D~0A$elapsed = $i * 
+$pollMs;~0D~0Aif ($elapsed < $minDelayMs) {~0D~0A  
+  Wait($minDelayMs - $elapsed);~0D~0A}~0D~0A~0D~0A/
+/ === 5) If no acceptable fill, cancel and exit (do
+ not touch existing stops) ===~0D~0Aif ($filled == 
+0) {~0D~0A    $order.Cancel();~0D~0A    return;~0D~0A
+}~0D~0A~0D~0A// Optional: if we accepted a partial 
+and want to freeze size before arming stop~0D~0Aif 
+($filled == 2 && $cancelRemainderOnPartial == 1) {~0D
+~0A    $order.Cancel();~0D~0A    // brief wait to l
+et the residual cancel~0D~0A    Wait(200);~0D~0A}~0D
+~0A~0D~0A// === 6) Arm unified 1R stop via reusable
+ ~E2~80~9CSet Auto Stop~E2~80~9D script ===~0D~0Aif
+ ($useAutoStop == "Yes") {~0D~0A    ExecHotKey("Set
+ Auto Stop");   ~0D~0A}~0D~0A~0D~0A// == 7) Build a
+nd set take profit trigger (optional) ==~0D~0A// On
+ly (re)build TP if we are NOT already profitable on
+ the existing position.~0D~0A// For longs, "profita
+ble" means: BID > avgBefore on the position that ex
+isted~0D~0A// before this entry. If we're already g
+reen, do NOT reset TP.~0D~0Aif ($useTakeProfit == "
+Yes") {~0D~0A~0D~0A    // If no position beforehand
+, always set TP (fresh trade)~0D~0A    if ($posBefo
+re <= 0) {~0D~0A        ExecHotKey("Set Take Profit
+");~0D~0A    } else {~0D~0A        // We had a long
+ position before this add. Check profitability.~0D~0A
+        $bidNow = BID;~0D~0A~0D~0A        // If avg
+Before is invalid, be conservative and allow TP res
+et~0D~0A        if ($avgBefore <= 0) {~0D~0A       
+     ExecHotKey("Set Take Profit");~0D~0A        } 
+else {~0D~0A            // Only reset TP if NOT yet
+ profitable (bid <= avgBefore)~0D~0A            if 
+($bidNow <= $avgBefore) {~0D~0A                Exec
+HotKey("Set Take Profit");~0D~0A            }~0D~0A
+            // else: already profitable ~E2~86~92 d
+o nothing, keep existing TP~0D~0A        }~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// --- End ---
+Alt+Shift+3:Buy 100 Ask SL:~ 7302:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 100 * $qtyMult;~0D~0A$ref
+Px             = ASK;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx;~0D~0A$hypoStop = $pxEntry - $stopLossTrigger;
+~0D~0A~0D~0A// ---- Resolve tick increment for safe
+ty checks (based on current context) ----~0D~0A$inc
+ = 0.01;~0D~0Aif ($pxEntry < 1 || $hypoStop < 1 || 
+$bid < 1 || $ask < 1)        { $inc = 0.001; }~0D~0A
+if ($pxEntry < 0.25 || $hypoStop < 0.25 || $bid < 0
+.25 || $ask < 0.25) { $inc = 0.0005; }~0D~0A~0D~0A/
+/ === 1) Slippage-aware spread/stop safety (longs) 
+===~0D~0A$stopVsBidFail = 0;~0D~0A~0D~0A// margin f
+or safety = max(slipTicksMin * inc, slipSpreadFrac 
+* spread)~0D~0A$slipMargin         = ($slipTicksMin
+ * $inc);~0D~0A$slipSpreadPart  = ($slipSpreadFrac 
+* $spread);~0D~0Aif ($slipSpreadPart > $slipMargin)
+ { $slipMargin = $slipSpreadPart; }~0D~0A~0D~0Aif (
+$useSlippageMargin == 1) {~0D~0A    // Require stop
+ to be below (Bid + margin)~0D~0A    if ($hypoStop 
+>= ($bid + $slipMargin)) { $stopVsBidFail = 1; }~0D
+~0A} else {~0D~0A    if ($hypoStop >= $bid) { $stop
+VsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// spread relati
+ve to stop distance guard (tune threshold as desire
+d)~0D~0A$spreadTooWide = ($spread > ($stopLossTrigg
+er * 0.75)) && $useSpreadCheck == 1;~0D~0A~0D~0A// 
+If either fails, alert and abort unless we are addi
+ng to an existing position~0D~0Aif (($stopVsBidFail
+ == 1 || $spreadTooWide == 1) && $posBefore <=0) {~0D
+~0A    $msg = "Spread/Stop safety failed for " + Sy
+mbol + "\n" +~0D~0A           "Bid: " + $bid + "  A
+sk: " + $ask + "  Spread: " + $spread + "\n" +~0D~0A
+           "Planned Entry: " + $pxEntry + "  Planne
+d Stop: " + $hypoStop + "\n\n";~0D~0A    if ($stopV
+sBidFail == 1)  { $msg = $msg + "- STOP_ABOVE_BID_W
+ITH_MARGIN\n"; }~0D~0A    if ($spreadTooWide == 1) 
+ { $msg = $msg + "- SPREAD_TOO_WIDE vs stopOff\n"; 
+}~0D~0A    MsgBox($msg + "\nAction aborted.");~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Per-trade risk cap
+ (projected risk = stopLossTrigger * addShares)~0D~0A
+if ($usePerTradeRiskCap == 1) {~0D~0A    $projRisk 
+= $stopLossTrigger * $addShares;~0D~0A    if ($proj
+Risk > $riskCapDollars) {~0D~0A        MsgBox("Risk
+ cap exceeded for " + Symbol + ": projected $" + $p
+rojRisk + " > cap $" + $riskCapDollars + ". Abortin
+g.");~0D~0A        return;~0D~0A    }~0D~0A}~0D~0A~0D
+~0A// === 2) Cancel only BUY working orders (keep e
+xisting protection until we actually fill) ===~0D~0A
+$acc = GetAccountObj(Account);~0D~0A$acc.CancelOrde
+r("BUY", Symbol, 0);~0D~0A~0D~0A// === 3) Build ent
+ry; snap entry to increment to reduce rejects ===~0D
+~0A// Re-evaluate inc using pxEntry (some symbols j
+ump bands)~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 
+|| $bid < 1 || $ask < 1) { $inc = 0.001; }~0D~0Aif 
+($pxEntry < 0.25 || $bid < 0.25 || $ask < 0.25) { $
+inc = 0.0005; }~0D~0A$pxEntry = Round($pxEntry, 102
+, $inc);~0D~0A~0D~0A$order = NewOrderObj();~0D~0A$o
+rder.Account = Account;~0D~0A$order.Symbol  = Symbo
+l;~0D~0A$order.Route   = "ARCA";~0D~0A$order.Tif   
+  = "DAY+";~0D~0A$order.Side    = "B";      // Buy~0D
+~0A$order.Type    = "L";      // Limit~0D~0A$order.
+Price   = $pxEntry;~0D~0A$order.Share   = $addShare
+s;~0D~0A$order.Send();~0D~0A~0D~0A~0D~0A// === 4) P
+oll for fill (break when criteria met) ===~0D~0A$i 
+           = 0;~0D~0A$filled      = 0;~0D~0A$filled
+Qty = 0;~0D~0Awhile ($i < $maxPolls && $filled == 0
+) {~0D~0A    Wait($pollMs);~0D~0A    $order.GetInfo
+();                        // refresh order object~0D
+~0A    $filledQty = $order.Share - $order.Open; // 
+how many filled so far~0D~0A    if ($order.Open == 
+0) {~0D~0A        $filled = 1; // full fill~0D~0A  
+      break;~0D~0A    }~0D~0A    if ($acceptPartial
+ == 1 && $filledQty >= $minFillShares) {~0D~0A     
+   $filled = 2; // partial-accepted~0D~0A        br
+eak;~0D~0A    }~0D~0A    $i = $i + 1;~0D~0A}~0D~0A~0D
+~0A// throttle between orders~0D~0A$elapsed = $i * 
+$pollMs;~0D~0Aif ($elapsed < $minDelayMs) {~0D~0A  
+  Wait($minDelayMs - $elapsed);~0D~0A}~0D~0A~0D~0A/
+/ === 5) If no acceptable fill, cancel and exit (do
+ not touch existing stops) ===~0D~0Aif ($filled == 
+0) {~0D~0A    $order.Cancel();~0D~0A    return;~0D~0A
+}~0D~0A~0D~0A// Optional: if we accepted a partial 
+and want to freeze size before arming stop~0D~0Aif 
+($filled == 2 && $cancelRemainderOnPartial == 1) {~0D
+~0A    $order.Cancel();~0D~0A    // brief wait to l
+et the residual cancel~0D~0A    Wait(200);~0D~0A}~0D
+~0A~0D~0A// === 6) Arm unified 1R stop via reusable
+ ~E2~80~9CSet Auto Stop~E2~80~9D script ===~0D~0Aif
+ ($useAutoStop == "Yes") {~0D~0A    ExecHotKey("Set
+ Auto Stop");   ~0D~0A}~0D~0A~0D~0A// == 7) Build a
+nd set take profit trigger (optional) ==~0D~0A// On
+ly (re)build TP if we are NOT already profitable on
+ the existing position.~0D~0A// For longs, "profita
+ble" means: BID > avgBefore on the position that ex
+isted~0D~0A// before this entry. If we're already g
+reen, do NOT reset TP.~0D~0Aif ($useTakeProfit == "
+Yes") {~0D~0A~0D~0A    // If no position beforehand
+, always set TP (fresh trade)~0D~0A    if ($posBefo
+re <= 0) {~0D~0A        ExecHotKey("Set Take Profit
+");~0D~0A    } else {~0D~0A        // We had a long
+ position before this add. Check profitability.~0D~0A
+        $bidNow = BID;~0D~0A~0D~0A        // If avg
+Before is invalid, be conservative and allow TP res
+et~0D~0A        if ($avgBefore <= 0) {~0D~0A       
+     ExecHotKey("Set Take Profit");~0D~0A        } 
+else {~0D~0A            // Only reset TP if NOT yet
+ profitable (bid <= avgBefore)~0D~0A            if 
+($bidNow <= $avgBefore) {~0D~0A                Exec
+HotKey("Set Take Profit");~0D~0A            }~0D~0A
+            // else: already profitable ~E2~86~92 d
+o nothing, keep existing TP~0D~0A        }~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// --- End ---
+Alt+Shift+4:Buy 150 Ask SL:~ 7302:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 150 * $qtyMult;~0D~0A$ref
+Px             = ASK;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx;~0D~0A$hypoStop = $pxEntry - $stopLossTrigger;
+~0D~0A~0D~0A// ---- Resolve tick increment for safe
+ty checks (based on current context) ----~0D~0A$inc
+ = 0.01;~0D~0Aif ($pxEntry < 1 || $hypoStop < 1 || 
+$bid < 1 || $ask < 1)        { $inc = 0.001; }~0D~0A
+if ($pxEntry < 0.25 || $hypoStop < 0.25 || $bid < 0
+.25 || $ask < 0.25) { $inc = 0.0005; }~0D~0A~0D~0A/
+/ === 1) Slippage-aware spread/stop safety (longs) 
+===~0D~0A$stopVsBidFail = 0;~0D~0A~0D~0A// margin f
+or safety = max(slipTicksMin * inc, slipSpreadFrac 
+* spread)~0D~0A$slipMargin         = ($slipTicksMin
+ * $inc);~0D~0A$slipSpreadPart  = ($slipSpreadFrac 
+* $spread);~0D~0Aif ($slipSpreadPart > $slipMargin)
+ { $slipMargin = $slipSpreadPart; }~0D~0A~0D~0Aif (
+$useSlippageMargin == 1) {~0D~0A    // Require stop
+ to be below (Bid + margin)~0D~0A    if ($hypoStop 
+>= ($bid + $slipMargin)) { $stopVsBidFail = 1; }~0D
+~0A} else {~0D~0A    if ($hypoStop >= $bid) { $stop
+VsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// spread relati
+ve to stop distance guard (tune threshold as desire
+d)~0D~0A$spreadTooWide = ($spread > ($stopLossTrigg
+er * 0.75)) && $useSpreadCheck == 1;~0D~0A~0D~0A// 
+If either fails, alert and abort unless we are addi
+ng to an existing position~0D~0Aif (($stopVsBidFail
+ == 1 || $spreadTooWide == 1) && $posBefore <=0) {~0D
+~0A    $msg = "Spread/Stop safety failed for " + Sy
+mbol + "\n" +~0D~0A           "Bid: " + $bid + "  A
+sk: " + $ask + "  Spread: " + $spread + "\n" +~0D~0A
+           "Planned Entry: " + $pxEntry + "  Planne
+d Stop: " + $hypoStop + "\n\n";~0D~0A    if ($stopV
+sBidFail == 1)  { $msg = $msg + "- STOP_ABOVE_BID_W
+ITH_MARGIN\n"; }~0D~0A    if ($spreadTooWide == 1) 
+ { $msg = $msg + "- SPREAD_TOO_WIDE vs stopOff\n"; 
+}~0D~0A    MsgBox($msg + "\nAction aborted.");~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Per-trade risk cap
+ (projected risk = stopLossTrigger * addShares)~0D~0A
+if ($usePerTradeRiskCap == 1) {~0D~0A    $projRisk 
+= $stopLossTrigger * $addShares;~0D~0A    if ($proj
+Risk > $riskCapDollars) {~0D~0A        MsgBox("Risk
+ cap exceeded for " + Symbol + ": projected $" + $p
+rojRisk + " > cap $" + $riskCapDollars + ". Abortin
+g.");~0D~0A        return;~0D~0A    }~0D~0A}~0D~0A~0D
+~0A// === 2) Cancel only BUY working orders (keep e
+xisting protection until we actually fill) ===~0D~0A
+$acc = GetAccountObj(Account);~0D~0A$acc.CancelOrde
+r("BUY", Symbol, 0);~0D~0A~0D~0A// === 3) Build ent
+ry; snap entry to increment to reduce rejects ===~0D
+~0A// Re-evaluate inc using pxEntry (some symbols j
+ump bands)~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 
+|| $bid < 1 || $ask < 1) { $inc = 0.001; }~0D~0Aif 
+($pxEntry < 0.25 || $bid < 0.25 || $ask < 0.25) { $
+inc = 0.0005; }~0D~0A$pxEntry = Round($pxEntry, 102
+, $inc);~0D~0A~0D~0A$order = NewOrderObj();~0D~0A$o
+rder.Account = Account;~0D~0A$order.Symbol  = Symbo
+l;~0D~0A$order.Route   = "ARCA";~0D~0A$order.Tif   
+  = "DAY+";~0D~0A$order.Side    = "B";      // Buy~0D
+~0A$order.Type    = "L";      // Limit~0D~0A$order.
+Price   = $pxEntry;~0D~0A$order.Share   = $addShare
+s;~0D~0A$order.Send();~0D~0A~0D~0A~0D~0A// === 4) P
+oll for fill (break when criteria met) ===~0D~0A$i 
+           = 0;~0D~0A$filled      = 0;~0D~0A$filled
+Qty = 0;~0D~0Awhile ($i < $maxPolls && $filled == 0
+) {~0D~0A    Wait($pollMs);~0D~0A    $order.GetInfo
+();                        // refresh order object~0D
+~0A    $filledQty = $order.Share - $order.Open; // 
+how many filled so far~0D~0A    if ($order.Open == 
+0) {~0D~0A        $filled = 1; // full fill~0D~0A  
+      break;~0D~0A    }~0D~0A    if ($acceptPartial
+ == 1 && $filledQty >= $minFillShares) {~0D~0A     
+   $filled = 2; // partial-accepted~0D~0A        br
+eak;~0D~0A    }~0D~0A    $i = $i + 1;~0D~0A}~0D~0A~0D
+~0A// throttle between orders~0D~0A$elapsed = $i * 
+$pollMs;~0D~0Aif ($elapsed < $minDelayMs) {~0D~0A  
+  Wait($minDelayMs - $elapsed);~0D~0A}~0D~0A~0D~0A/
+/ === 5) If no acceptable fill, cancel and exit (do
+ not touch existing stops) ===~0D~0Aif ($filled == 
+0) {~0D~0A    $order.Cancel();~0D~0A    return;~0D~0A
+}~0D~0A~0D~0A// Optional: if we accepted a partial 
+and want to freeze size before arming stop~0D~0Aif 
+($filled == 2 && $cancelRemainderOnPartial == 1) {~0D
+~0A    $order.Cancel();~0D~0A    // brief wait to l
+et the residual cancel~0D~0A    Wait(200);~0D~0A}~0D
+~0A~0D~0A// === 6) Arm unified 1R stop via reusable
+ ~E2~80~9CSet Auto Stop~E2~80~9D script ===~0D~0Aif
+ ($useAutoStop == "Yes") {~0D~0A    ExecHotKey("Set
+ Auto Stop");   ~0D~0A}~0D~0A~0D~0A// == 7) Build a
+nd set take profit trigger (optional) ==~0D~0A// On
+ly (re)build TP if we are NOT already profitable on
+ the existing position.~0D~0A// For longs, "profita
+ble" means: BID > avgBefore on the position that ex
+isted~0D~0A// before this entry. If we're already g
+reen, do NOT reset TP.~0D~0Aif ($useTakeProfit == "
+Yes") {~0D~0A~0D~0A    // If no position beforehand
+, always set TP (fresh trade)~0D~0A    if ($posBefo
+re <= 0) {~0D~0A        ExecHotKey("Set Take Profit
+");~0D~0A    } else {~0D~0A        // We had a long
+ position before this add. Check profitability.~0D~0A
+        $bidNow = BID;~0D~0A~0D~0A        // If avg
+Before is invalid, be conservative and allow TP res
+et~0D~0A        if ($avgBefore <= 0) {~0D~0A       
+     ExecHotKey("Set Take Profit");~0D~0A        } 
+else {~0D~0A            // Only reset TP if NOT yet
+ profitable (bid <= avgBefore)~0D~0A            if 
+($bidNow <= $avgBefore) {~0D~0A                Exec
+HotKey("Set Take Profit");~0D~0A            }~0D~0A
+            // else: already profitable ~E2~86~92 d
+o nothing, keep existing TP~0D~0A        }~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// --- End ---
+Alt+Ctrl+Shift+1:Buy 10 Ask+ SL:~ 7428:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// Ice Breaker = 1
+/4 of normal share size~0D~0A$quarter = 50 * $qtyMu
+lt * 0.25;~0D~0A$scaled = $quarter + 2.5;~0D~0A$add
+Shares = $scaled - ($scaled % 5);~0D~0A~0D~0A// ---
+- Tunables ----~0D~0A$refPx             = ASK;     
+        // BID or ASK~0D~0A$minDelayMs  = 1000;    
+       // throttle between order sends (ms)~0D~0A~0D
+~0A// ---- Max position size guard rail ----~0D~0Ai
+f ($maxPositionSize > 0) {    ~0D~0A    // Determin
+e current position in Primary_OE (fallback: Pos)~0D
+~0A    $curPos = 0;~0D~0A    if (IsObj($M)) {~0D~0A
+        $curPos = $M.Pos;~0D~0A    } else {~0D~0A  
+      $curPos = Pos;        // DAS built-in positio
+n for current symbol~0D~0A    }~0D~0A~0D~0A    // R
+emaining capacity before hitting the guard rail~0D~0A
+    $remaining = $maxPositionSize - $curPos;~0D~0A~0D
+~0A    // If we're already at / above max, do not a
+llow more size~0D~0A    if ($remaining <= 0) {~0D~0A
+        MsgBox("Max position size reached for " + S
+ymbol + ~0D~0A               " (" + $maxPositionSiz
+e + " shares). No additional size allowed.");~0D~0A
+        return;~0D~0A    }~0D~0A~0D~0A    // If thi
+s clip would exceed max size, clamp it down~0D~0A  
+  if ($addShares > $remaining) {~0D~0A        $addS
+hares = $remaining;~0D~0A    }~0D~0A~0D~0A}~0D~0A~0D
+~0A// ---- Tick-size Bands (no functions; simple if
+-else ladder) ----~0D~0A// We~E2~80~99ll resolve th
+e increment later using current prices.~0D~0A//   <
+ $0.25  -> 0.0005~0D~0A//   < $1.00  -> 0.001~0D~0A
+//   ~E2~89~A5 $1.00  -> 0.01~0D~0A~0D~0A// === 0) 
+Quote sanity & derived prices for safety check ===~0D
+~0A$bid    = BID;~0D~0A$ask    = ASK;~0D~0A$spread 
+= $ask - $bid;~0D~0A~0D~0Aif ($bid <= 0 || $ask <= 
+0 || $spread < 0) {~0D~0A    MsgBox("Quote sanity f
+ailed for " + Symbol + ": BID=" + $bid + " ASK=" + 
+$ask + ". Aborting.");~0D~0A    return;~0D~0A}~0D~0A
+~0D~0A// Projected entry/stop based on reference si
+de~0D~0A$pxEntry    = $refPx + $entryOffset;~0D~0A$
+hypoStop = $pxEntry - $stopLossTrigger;~0D~0A~0D~0A
+// ---- Resolve tick increment for safety checks (b
+ased on current context) ----~0D~0A$inc = 0.01;~0D~0A
+if ($pxEntry < 1 || $hypoStop < 1 || $bid < 1 || $a
+sk < 1)        { $inc = 0.001; }~0D~0Aif ($pxEntry 
+< 0.25 || $hypoStop < 0.25 || $bid < 0.25 || $ask <
+ 0.25) { $inc = 0.0005; }~0D~0A~0D~0A// === 1) Slip
+page-aware spread/stop safety (longs) ===~0D~0A$sto
+pVsBidFail = 0;~0D~0A~0D~0A// margin for safety = m
+ax(slipTicksMin * inc, slipSpreadFrac * spread)~0D~0A
+$slipMargin         = ($slipTicksMin * $inc);~0D~0A
+$slipSpreadPart  = ($slipSpreadFrac * $spread);~0D~0A
+if ($slipSpreadPart > $slipMargin) { $slipMargin = 
+$slipSpreadPart; }~0D~0A~0D~0Aif ($useSlippageMargi
+n == 1) {~0D~0A    // Require stop to be below (Bid
+ + margin)~0D~0A    if ($hypoStop >= ($bid + $slipM
+argin)) { $stopVsBidFail = 1; }~0D~0A} else {~0D~0A
+    if ($hypoStop >= $bid) { $stopVsBidFail = 1; }~0D
+~0A}~0D~0A~0D~0A// spread relative to stop distance
+ guard (tune threshold as desired)~0D~0A$spreadTooW
+ide = ($spread > ($stopLossTrigger * 0.75)) && $use
+SpreadCheck == 1;~0D~0A~0D~0A// If either fails, al
+ert and abort unless we are adding to an existing p
+osition~0D~0Aif (($stopVsBidFail == 1 || $spreadToo
+Wide == 1) && $posBefore <=0) {~0D~0A    $msg = "Sp
+read/Stop safety failed for " + Symbol + "\n" +~0D~0A
+           "Bid: " + $bid + "  Ask: " + $ask + "  S
+pread: " + $spread + "\n" +~0D~0A           "Planne
+d Entry: " + $pxEntry + "  Planned Stop: " + $hypoS
+top + "\n\n";~0D~0A    if ($stopVsBidFail == 1)  { 
+$msg = $msg + "- STOP_ABOVE_BID_WITH_MARGIN\n"; }~0D
+~0A    if ($spreadTooWide == 1)  { $msg = $msg + "-
+ SPREAD_TOO_WIDE vs stopOff\n"; }~0D~0A    MsgBox($
+msg + "\nAction aborted.");~0D~0A    return;~0D~0A}
+~0D~0A~0D~0A// Per-trade risk cap (projected risk =
+ stopLossTrigger * addShares)~0D~0Aif ($usePerTrade
+RiskCap == 1) {~0D~0A    $projRisk = $stopLossTrigg
+er * $addShares;~0D~0A    if ($projRisk > $riskCapD
+ollars) {~0D~0A        MsgBox("Risk cap exceeded fo
+r " + Symbol + ": projected $" + $projRisk + " > ca
+p $" + $riskCapDollars + ". Aborting.");~0D~0A     
+   return;~0D~0A    }~0D~0A}~0D~0A~0D~0A// === 2) C
+ancel only BUY working orders (keep existing protec
+tion until we actually fill) ===~0D~0A$acc = GetAcc
+ountObj(Account);~0D~0A$acc.CancelOrder("BUY", Symb
+ol, 0);~0D~0A~0D~0A// === 3) Build entry; snap entr
+y to increment to reduce rejects ===~0D~0A// Re-eva
+luate inc using pxEntry (some symbols jump bands)~0D
+~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 || $bid < 1 |
+| $ask < 1) { $inc = 0.001; }~0D~0Aif ($pxEntry < 0
+.25 || $bid < 0.25 || $ask < 0.25) { $inc = 0.0005;
+ }~0D~0A$pxEntry = Round($pxEntry, 102, $inc);~0D~0A
+~0D~0A$order = NewOrderObj();~0D~0A$order.Account =
+ Account;~0D~0A$order.Symbol  = Symbol;~0D~0A$order
+.Route   = "ARCA";~0D~0A$order.Tif     = "DAY+";~0D
+~0A$order.Side    = "B";      // Buy~0D~0A$order.Ty
+pe    = "L";      // Limit~0D~0A$order.Price   = $p
+xEntry;~0D~0A$order.Share   = $addShares;~0D~0A$ord
+er.Send();~0D~0A~0D~0A~0D~0A// === 4) Poll for fill
+ (break when criteria met) ===~0D~0A$i            =
+ 0;~0D~0A$filled      = 0;~0D~0A$filledQty = 0;~0D~0A
+while ($i < $maxPolls && $filled == 0) {~0D~0A    W
+ait($pollMs);~0D~0A    $order.GetInfo();           
+             // refresh order object~0D~0A    $fill
+edQty = $order.Share - $order.Open; // how many fil
+led so far~0D~0A    if ($order.Open == 0) {~0D~0A  
+      $filled = 1; // full fill~0D~0A        break;
+~0D~0A    }~0D~0A    if ($acceptPartial == 1 && $fi
+lledQty >= $minFillShares) {~0D~0A        $filled =
+ 2; // partial-accepted~0D~0A        break;~0D~0A  
+  }~0D~0A    $i = $i + 1;~0D~0A}~0D~0A~0D~0A// thro
+ttle between orders~0D~0A$elapsed = $i * $pollMs;~0D
+~0Aif ($elapsed < $minDelayMs) {~0D~0A    Wait($min
+DelayMs - $elapsed);~0D~0A}~0D~0A~0D~0A// === 5) If
+ no acceptable fill, cancel and exit (do not touch 
+existing stops) ===~0D~0Aif ($filled == 0) {~0D~0A 
+   $order.Cancel();~0D~0A    return;~0D~0A}~0D~0A~0D
+~0A// Optional: if we accepted a partial and want t
+o freeze size before arming stop~0D~0Aif ($filled =
+= 2 && $cancelRemainderOnPartial == 1) {~0D~0A    $
+order.Cancel();~0D~0A    // brief wait to let the r
+esidual cancel~0D~0A    Wait(200);~0D~0A}~0D~0A~0D~0A
+// === 6) Arm unified 1R stop via reusable ~E2~80~9C
+Set Auto Stop~E2~80~9D script ===~0D~0Aif ($useAuto
+Stop == "Yes") {~0D~0A    ExecHotKey("Set Auto Stop
+");   ~0D~0A}~0D~0A~0D~0A// == 7) Build and set tak
+e profit trigger (optional) ==~0D~0A// Only (re)bui
+ld TP if we are NOT already profitable on the exist
+ing position.~0D~0A// For longs, "profitable" means
+: BID > avgBefore on the position that existed~0D~0A
+// before this entry. If we're already green, do NO
+T reset TP.~0D~0Aif ($useTakeProfit == "Yes") {~0D~0A
+~0D~0A    // If no position beforehand, always set 
+TP (fresh trade)~0D~0A    if ($posBefore <= 0) {~0D
+~0A        ExecHotKey("Set Take Profit");~0D~0A    
+} else {~0D~0A        // We had a long position bef
+ore this add. Check profitability.~0D~0A        $bi
+dNow = BID;~0D~0A~0D~0A        // If avgBefore is i
+nvalid, be conservative and allow TP reset~0D~0A   
+     if ($avgBefore <= 0) {~0D~0A            ExecHo
+tKey("Set Take Profit");~0D~0A        } else {~0D~0A
+            // Only reset TP if NOT yet profitable 
+(bid <= avgBefore)~0D~0A            if ($bidNow <= 
+$avgBefore) {~0D~0A                ExecHotKey("Set 
+Take Profit");~0D~0A            }~0D~0A            
+// else: already profitable ~E2~86~92 do nothing, k
+eep existing TP~0D~0A        }~0D~0A    }~0D~0A}~0D
+~0A~0D~0A// --- End ---
+Alt+Ctrl+Shift+2:Buy 50 Ask+ SL:~ 7316:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 50 * $qtyMult;~0D~0A$refP
+x             = ASK;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx + $entryOffset;~0D~0A$hypoStop = $pxEntry - $s
+topLossTrigger;~0D~0A~0D~0A// ---- Resolve tick inc
+rement for safety checks (based on current context)
+ ----~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 || $h
+ypoStop < 1 || $bid < 1 || $ask < 1)        { $inc 
+= 0.001; }~0D~0Aif ($pxEntry < 0.25 || $hypoStop < 
+0.25 || $bid < 0.25 || $ask < 0.25) { $inc = 0.0005
+; }~0D~0A~0D~0A// === 1) Slippage-aware spread/stop
+ safety (longs) ===~0D~0A$stopVsBidFail = 0;~0D~0A~0D
+~0A// margin for safety = max(slipTicksMin * inc, s
+lipSpreadFrac * spread)~0D~0A$slipMargin         = 
+($slipTicksMin * $inc);~0D~0A$slipSpreadPart  = ($s
+lipSpreadFrac * $spread);~0D~0Aif ($slipSpreadPart 
+> $slipMargin) { $slipMargin = $slipSpreadPart; }~0D
+~0A~0D~0Aif ($useSlippageMargin == 1) {~0D~0A    //
+ Require stop to be below (Bid + margin)~0D~0A    i
+f ($hypoStop >= ($bid + $slipMargin)) { $stopVsBidF
+ail = 1; }~0D~0A} else {~0D~0A    if ($hypoStop >= 
+$bid) { $stopVsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// 
+spread relative to stop distance guard (tune thresh
+old as desired)~0D~0A$spreadTooWide = ($spread > ($
+stopLossTrigger * 0.75)) && $useSpreadCheck == 1;~0D
+~0A~0D~0A// If either fails, alert and abort unless
+ we are adding to an existing position~0D~0Aif (($s
+topVsBidFail == 1 || $spreadTooWide == 1) && $posBe
+fore <=0) {~0D~0A    $msg = "Spread/Stop safety fai
+led for " + Symbol + "\n" +~0D~0A           "Bid: "
+ + $bid + "  Ask: " + $ask + "  Spread: " + $spread
+ + "\n" +~0D~0A           "Planned Entry: " + $pxEn
+try + "  Planned Stop: " + $hypoStop + "\n\n";~0D~0A
+    if ($stopVsBidFail == 1)  { $msg = $msg + "- ST
+OP_ABOVE_BID_WITH_MARGIN\n"; }~0D~0A    if ($spread
+TooWide == 1)  { $msg = $msg + "- SPREAD_TOO_WIDE v
+s stopOff\n"; }~0D~0A    MsgBox($msg + "\nAction ab
+orted.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Per
+-trade risk cap (projected risk = stopLossTrigger *
+ addShares)~0D~0Aif ($usePerTradeRiskCap == 1) {~0D
+~0A    $projRisk = $stopLossTrigger * $addShares;~0D
+~0A    if ($projRisk > $riskCapDollars) {~0D~0A    
+    MsgBox("Risk cap exceeded for " + Symbol + ": p
+rojected $" + $projRisk + " > cap $" + $riskCapDoll
+ars + ". Aborting.");~0D~0A        return;~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// === 2) Cancel only BUY work
+ing orders (keep existing protection until we actua
+lly fill) ===~0D~0A$acc = GetAccountObj(Account);~0D
+~0A$acc.CancelOrder("BUY", Symbol, 0);~0D~0A~0D~0A/
+/ === 3) Build entry; snap entry to increment to re
+duce rejects ===~0D~0A// Re-evaluate inc using pxEn
+try (some symbols jump bands)~0D~0A$inc = 0.01;~0D~0A
+if ($pxEntry < 1 || $bid < 1 || $ask < 1) { $inc = 
+0.001; }~0D~0Aif ($pxEntry < 0.25 || $bid < 0.25 ||
+ $ask < 0.25) { $inc = 0.0005; }~0D~0A$pxEntry = Ro
+und($pxEntry, 102, $inc);~0D~0A~0D~0A$order = NewOr
+derObj();~0D~0A$order.Account = Account;~0D~0A$orde
+r.Symbol  = Symbol;~0D~0A$order.Route   = "ARCA";~0D
+~0A$order.Tif     = "DAY+";~0D~0A$order.Side    = "
+B";      // Buy~0D~0A$order.Type    = "L";      // 
+Limit~0D~0A$order.Price   = $pxEntry;~0D~0A$order.S
+hare   = $addShares;~0D~0A$order.Send();~0D~0A~0D~0A
+~0D~0A// === 4) Poll for fill (break when criteria 
+met) ===~0D~0A$i            = 0;~0D~0A$filled      
+= 0;~0D~0A$filledQty = 0;~0D~0Awhile ($i < $maxPoll
+s && $filled == 0) {~0D~0A    Wait($pollMs);~0D~0A 
+   $order.GetInfo();                        // refr
+esh order object~0D~0A    $filledQty = $order.Share
+ - $order.Open; // how many filled so far~0D~0A    
+if ($order.Open == 0) {~0D~0A        $filled = 1; /
+/ full fill~0D~0A        break;~0D~0A    }~0D~0A   
+ if ($acceptPartial == 1 && $filledQty >= $minFillS
+hares) {~0D~0A        $filled = 2; // partial-accep
+ted~0D~0A        break;~0D~0A    }~0D~0A    $i = $i
+ + 1;~0D~0A}~0D~0A~0D~0A// throttle between orders~0D
+~0A$elapsed = $i * $pollMs;~0D~0Aif ($elapsed < $mi
+nDelayMs) {~0D~0A    Wait($minDelayMs - $elapsed);~0D
+~0A}~0D~0A~0D~0A// === 5) If no acceptable fill, ca
+ncel and exit (do not touch existing stops) ===~0D~0A
+if ($filled == 0) {~0D~0A    $order.Cancel();~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Optional: if we ac
+cepted a partial and want to freeze size before arm
+ing stop~0D~0Aif ($filled == 2 && $cancelRemainderO
+nPartial == 1) {~0D~0A    $order.Cancel();~0D~0A   
+ // brief wait to let the residual cancel~0D~0A    
+Wait(200);~0D~0A}~0D~0A~0D~0A// === 6) Arm unified 
+1R stop via reusable ~E2~80~9CSet Auto Stop~E2~80~9D
+ script ===~0D~0Aif ($useAutoStop == "Yes") {~0D~0A
+    ExecHotKey("Set Auto Stop");   ~0D~0A}~0D~0A~0D
+~0A// == 7) Build and set take profit trigger (opti
+onal) ==~0D~0A// Only (re)build TP if we are NOT al
+ready profitable on the existing position.~0D~0A// 
+For longs, "profitable" means: BID > avgBefore on t
+he position that existed~0D~0A// before this entry.
+ If we're already green, do NOT reset TP.~0D~0Aif (
+$useTakeProfit == "Yes") {~0D~0A~0D~0A    // If no 
+position beforehand, always set TP (fresh trade)~0D
+~0A    if ($posBefore <= 0) {~0D~0A        ExecHotK
+ey("Set Take Profit");~0D~0A    } else {~0D~0A     
+   // We had a long position before this add. Check
+ profitability.~0D~0A        $bidNow = BID;~0D~0A~0D
+~0A        // If avgBefore is invalid, be conservat
+ive and allow TP reset~0D~0A        if ($avgBefore 
+<= 0) {~0D~0A            ExecHotKey("Set Take Profi
+t");~0D~0A        } else {~0D~0A            // Only
+ reset TP if NOT yet profitable (bid <= avgBefore)~0D
+~0A            if ($bidNow <= $avgBefore) {~0D~0A  
+              ExecHotKey("Set Take Profit");~0D~0A 
+           }~0D~0A            // else: already prof
+itable ~E2~86~92 do nothing, keep existing TP~0D~0A
+        }~0D~0A    }~0D~0A}~0D~0A~0D~0A// --- End -
+--
+Alt+Ctrl+Shift+3:Buy 100 Ask+ SL:~ 7317:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 100 * $qtyMult;~0D~0A$ref
+Px             = ASK;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx + $entryOffset;~0D~0A$hypoStop = $pxEntry - $s
+topLossTrigger;~0D~0A~0D~0A// ---- Resolve tick inc
+rement for safety checks (based on current context)
+ ----~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 || $h
+ypoStop < 1 || $bid < 1 || $ask < 1)        { $inc 
+= 0.001; }~0D~0Aif ($pxEntry < 0.25 || $hypoStop < 
+0.25 || $bid < 0.25 || $ask < 0.25) { $inc = 0.0005
+; }~0D~0A~0D~0A// === 1) Slippage-aware spread/stop
+ safety (longs) ===~0D~0A$stopVsBidFail = 0;~0D~0A~0D
+~0A// margin for safety = max(slipTicksMin * inc, s
+lipSpreadFrac * spread)~0D~0A$slipMargin         = 
+($slipTicksMin * $inc);~0D~0A$slipSpreadPart  = ($s
+lipSpreadFrac * $spread);~0D~0Aif ($slipSpreadPart 
+> $slipMargin) { $slipMargin = $slipSpreadPart; }~0D
+~0A~0D~0Aif ($useSlippageMargin == 1) {~0D~0A    //
+ Require stop to be below (Bid + margin)~0D~0A    i
+f ($hypoStop >= ($bid + $slipMargin)) { $stopVsBidF
+ail = 1; }~0D~0A} else {~0D~0A    if ($hypoStop >= 
+$bid) { $stopVsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// 
+spread relative to stop distance guard (tune thresh
+old as desired)~0D~0A$spreadTooWide = ($spread > ($
+stopLossTrigger * 0.75)) && $useSpreadCheck == 1;~0D
+~0A~0D~0A// If either fails, alert and abort unless
+ we are adding to an existing position~0D~0Aif (($s
+topVsBidFail == 1 || $spreadTooWide == 1) && $posBe
+fore <=0) {~0D~0A    $msg = "Spread/Stop safety fai
+led for " + Symbol + "\n" +~0D~0A           "Bid: "
+ + $bid + "  Ask: " + $ask + "  Spread: " + $spread
+ + "\n" +~0D~0A           "Planned Entry: " + $pxEn
+try + "  Planned Stop: " + $hypoStop + "\n\n";~0D~0A
+    if ($stopVsBidFail == 1)  { $msg = $msg + "- ST
+OP_ABOVE_BID_WITH_MARGIN\n"; }~0D~0A    if ($spread
+TooWide == 1)  { $msg = $msg + "- SPREAD_TOO_WIDE v
+s stopOff\n"; }~0D~0A    MsgBox($msg + "\nAction ab
+orted.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Per
+-trade risk cap (projected risk = stopLossTrigger *
+ addShares)~0D~0Aif ($usePerTradeRiskCap == 1) {~0D
+~0A    $projRisk = $stopLossTrigger * $addShares;~0D
+~0A    if ($projRisk > $riskCapDollars) {~0D~0A    
+    MsgBox("Risk cap exceeded for " + Symbol + ": p
+rojected $" + $projRisk + " > cap $" + $riskCapDoll
+ars + ". Aborting.");~0D~0A        return;~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// === 2) Cancel only BUY work
+ing orders (keep existing protection until we actua
+lly fill) ===~0D~0A$acc = GetAccountObj(Account);~0D
+~0A$acc.CancelOrder("BUY", Symbol, 0);~0D~0A~0D~0A/
+/ === 3) Build entry; snap entry to increment to re
+duce rejects ===~0D~0A// Re-evaluate inc using pxEn
+try (some symbols jump bands)~0D~0A$inc = 0.01;~0D~0A
+if ($pxEntry < 1 || $bid < 1 || $ask < 1) { $inc = 
+0.001; }~0D~0Aif ($pxEntry < 0.25 || $bid < 0.25 ||
+ $ask < 0.25) { $inc = 0.0005; }~0D~0A$pxEntry = Ro
+und($pxEntry, 102, $inc);~0D~0A~0D~0A$order = NewOr
+derObj();~0D~0A$order.Account = Account;~0D~0A$orde
+r.Symbol  = Symbol;~0D~0A$order.Route   = "ARCA";~0D
+~0A$order.Tif     = "DAY+";~0D~0A$order.Side    = "
+B";      // Buy~0D~0A$order.Type    = "L";      // 
+Limit~0D~0A$order.Price   = $pxEntry;~0D~0A$order.S
+hare   = $addShares;~0D~0A$order.Send();~0D~0A~0D~0A
+~0D~0A// === 4) Poll for fill (break when criteria 
+met) ===~0D~0A$i            = 0;~0D~0A$filled      
+= 0;~0D~0A$filledQty = 0;~0D~0Awhile ($i < $maxPoll
+s && $filled == 0) {~0D~0A    Wait($pollMs);~0D~0A 
+   $order.GetInfo();                        // refr
+esh order object~0D~0A    $filledQty = $order.Share
+ - $order.Open; // how many filled so far~0D~0A    
+if ($order.Open == 0) {~0D~0A        $filled = 1; /
+/ full fill~0D~0A        break;~0D~0A    }~0D~0A   
+ if ($acceptPartial == 1 && $filledQty >= $minFillS
+hares) {~0D~0A        $filled = 2; // partial-accep
+ted~0D~0A        break;~0D~0A    }~0D~0A    $i = $i
+ + 1;~0D~0A}~0D~0A~0D~0A// throttle between orders~0D
+~0A$elapsed = $i * $pollMs;~0D~0Aif ($elapsed < $mi
+nDelayMs) {~0D~0A    Wait($minDelayMs - $elapsed);~0D
+~0A}~0D~0A~0D~0A// === 5) If no acceptable fill, ca
+ncel and exit (do not touch existing stops) ===~0D~0A
+if ($filled == 0) {~0D~0A    $order.Cancel();~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Optional: if we ac
+cepted a partial and want to freeze size before arm
+ing stop~0D~0Aif ($filled == 2 && $cancelRemainderO
+nPartial == 1) {~0D~0A    $order.Cancel();~0D~0A   
+ // brief wait to let the residual cancel~0D~0A    
+Wait(200);~0D~0A}~0D~0A~0D~0A// === 6) Arm unified 
+1R stop via reusable ~E2~80~9CSet Auto Stop~E2~80~9D
+ script ===~0D~0Aif ($useAutoStop == "Yes") {~0D~0A
+    ExecHotKey("Set Auto Stop");   ~0D~0A}~0D~0A~0D
+~0A// == 7) Build and set take profit trigger (opti
+onal) ==~0D~0A// Only (re)build TP if we are NOT al
+ready profitable on the existing position.~0D~0A// 
+For longs, "profitable" means: BID > avgBefore on t
+he position that existed~0D~0A// before this entry.
+ If we're already green, do NOT reset TP.~0D~0Aif (
+$useTakeProfit == "Yes") {~0D~0A~0D~0A    // If no 
+position beforehand, always set TP (fresh trade)~0D
+~0A    if ($posBefore <= 0) {~0D~0A        ExecHotK
+ey("Set Take Profit");~0D~0A    } else {~0D~0A     
+   // We had a long position before this add. Check
+ profitability.~0D~0A        $bidNow = BID;~0D~0A~0D
+~0A        // If avgBefore is invalid, be conservat
+ive and allow TP reset~0D~0A        if ($avgBefore 
+<= 0) {~0D~0A            ExecHotKey("Set Take Profi
+t");~0D~0A        } else {~0D~0A            // Only
+ reset TP if NOT yet profitable (bid <= avgBefore)~0D
+~0A            if ($bidNow <= $avgBefore) {~0D~0A  
+              ExecHotKey("Set Take Profit");~0D~0A 
+           }~0D~0A            // else: already prof
+itable ~E2~86~92 do nothing, keep existing TP~0D~0A
+        }~0D~0A    }~0D~0A}~0D~0A~0D~0A// --- End -
+--
+Alt+Ctrl+Shift+4:Buy 150 Ask+ SL:~ 7317:// =====================~0D~0A//  SCALING-AWARE ENT
+RY~0D~0A// =====================~0D~0A~0D~0AFocusWi
+ndow Primary_OE;~0D~0A~0D~0A// ---- Global daily-lo
+ss guard per account ----~0D~0A$accName = GetVar("D
+AY_ACC");~0D~0A$lockKey = "TRADING_LOCKED_" + $accN
+ame;~0D~0A$locked  = GetVar($lockKey) * 1;~0D~0A~0D
+~0Aif ($locked == 1) {~0D~0A    MsgBox("Trading loc
+ked for " + $accName + " (daily loss limit hit).");
+~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Set ENTRY_SY
+M and clear TP_SYMBOL~0D~0A$M = GetWindowObj("Prima
+ry_OE");~0D~0Aif (IsObj($M)) {~0D~0A    $entrySymbo
+l = $M.Symb;~0D~0A} else {~0D~0A    $entrySymbol = 
+Symbol;~0D~0A}~0D~0A$tpSymbol = "";~0D~0A~0D~0A// -
+-- Capture pre-entry position & average cost (for T
+P logic) ---~0D~0A$posBefore = 0;~0D~0A$avgBefore =
+ 0;~0D~0A~0D~0Aif (IsObj($M)) {~0D~0A    $posBefore
+ = $M.Pos;~0D~0A    $avgBefore = $M.AvgCost;~0D~0A}
+ else {~0D~0A    $posBefore = Pos;~0D~0A    $avgBef
+ore = AvgCost;~0D~0A}~0D~0A~0D~0A// ---- Tunables -
+---~0D~0A$addShares     = 150 * $qtyMult;~0D~0A$ref
+Px             = ASK;             // BID or ASK~0D~0A
+$minDelayMs  = 1000;           // throttle between 
+order sends (ms)~0D~0A~0D~0A// ---- Max position si
+ze guard rail ----~0D~0Aif ($maxPositionSize > 0) {
+    ~0D~0A    // Determine current position in Prim
+ary_OE (fallback: Pos)~0D~0A    $curPos = 0;~0D~0A 
+   if (IsObj($M)) {~0D~0A        $curPos = $M.Pos;~0D
+~0A    } else {~0D~0A        $curPos = Pos;        
+// DAS built-in position for current symbol~0D~0A  
+  }~0D~0A~0D~0A    // Remaining capacity before hit
+ting the guard rail~0D~0A    $remaining = $maxPosit
+ionSize - $curPos;~0D~0A~0D~0A    // If we're alrea
+dy at / above max, do not allow more size~0D~0A    
+if ($remaining <= 0) {~0D~0A        MsgBox("Max pos
+ition size reached for " + Symbol + ~0D~0A         
+      " (" + $maxPositionSize + " shares). No addit
+ional size allowed.");~0D~0A        return;~0D~0A  
+  }~0D~0A~0D~0A    // If this clip would exceed max
+ size, clamp it down~0D~0A    if ($addShares > $rem
+aining) {~0D~0A        $addShares = $remaining;~0D~0A
+    }~0D~0A~0D~0A}~0D~0A~0D~0A// ---- Tick-size Ban
+ds (no functions; simple if-else ladder) ----~0D~0A
+// We~E2~80~99ll resolve the increment later using 
+current prices.~0D~0A//   < $0.25  -> 0.0005~0D~0A/
+/   < $1.00  -> 0.001~0D~0A//   ~E2~89~A5 $1.00  ->
+ 0.01~0D~0A~0D~0A// === 0) Quote sanity & derived p
+rices for safety check ===~0D~0A$bid    = BID;~0D~0A
+$ask    = ASK;~0D~0A$spread = $ask - $bid;~0D~0A~0D
+~0Aif ($bid <= 0 || $ask <= 0 || $spread < 0) {~0D~0A
+    MsgBox("Quote sanity failed for " + Symbol + ":
+ BID=" + $bid + " ASK=" + $ask + ". Aborting.");~0D
+~0A    return;~0D~0A}~0D~0A~0D~0A// Projected entry
+/stop based on reference side~0D~0A$pxEntry    = $r
+efPx + $entryOffset;~0D~0A$hypoStop = $pxEntry - $s
+topLossTrigger;~0D~0A~0D~0A// ---- Resolve tick inc
+rement for safety checks (based on current context)
+ ----~0D~0A$inc = 0.01;~0D~0Aif ($pxEntry < 1 || $h
+ypoStop < 1 || $bid < 1 || $ask < 1)        { $inc 
+= 0.001; }~0D~0Aif ($pxEntry < 0.25 || $hypoStop < 
+0.25 || $bid < 0.25 || $ask < 0.25) { $inc = 0.0005
+; }~0D~0A~0D~0A// === 1) Slippage-aware spread/stop
+ safety (longs) ===~0D~0A$stopVsBidFail = 0;~0D~0A~0D
+~0A// margin for safety = max(slipTicksMin * inc, s
+lipSpreadFrac * spread)~0D~0A$slipMargin         = 
+($slipTicksMin * $inc);~0D~0A$slipSpreadPart  = ($s
+lipSpreadFrac * $spread);~0D~0Aif ($slipSpreadPart 
+> $slipMargin) { $slipMargin = $slipSpreadPart; }~0D
+~0A~0D~0Aif ($useSlippageMargin == 1) {~0D~0A    //
+ Require stop to be below (Bid + margin)~0D~0A    i
+f ($hypoStop >= ($bid + $slipMargin)) { $stopVsBidF
+ail = 1; }~0D~0A} else {~0D~0A    if ($hypoStop >= 
+$bid) { $stopVsBidFail = 1; }~0D~0A}~0D~0A~0D~0A// 
+spread relative to stop distance guard (tune thresh
+old as desired)~0D~0A$spreadTooWide = ($spread > ($
+stopLossTrigger * 0.75)) && $useSpreadCheck == 1;~0D
+~0A~0D~0A// If either fails, alert and abort unless
+ we are adding to an existing position~0D~0Aif (($s
+topVsBidFail == 1 || $spreadTooWide == 1) && $posBe
+fore <=0) {~0D~0A    $msg = "Spread/Stop safety fai
+led for " + Symbol + "\n" +~0D~0A           "Bid: "
+ + $bid + "  Ask: " + $ask + "  Spread: " + $spread
+ + "\n" +~0D~0A           "Planned Entry: " + $pxEn
+try + "  Planned Stop: " + $hypoStop + "\n\n";~0D~0A
+    if ($stopVsBidFail == 1)  { $msg = $msg + "- ST
+OP_ABOVE_BID_WITH_MARGIN\n"; }~0D~0A    if ($spread
+TooWide == 1)  { $msg = $msg + "- SPREAD_TOO_WIDE v
+s stopOff\n"; }~0D~0A    MsgBox($msg + "\nAction ab
+orted.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Per
+-trade risk cap (projected risk = stopLossTrigger *
+ addShares)~0D~0Aif ($usePerTradeRiskCap == 1) {~0D
+~0A    $projRisk = $stopLossTrigger * $addShares;~0D
+~0A    if ($projRisk > $riskCapDollars) {~0D~0A    
+    MsgBox("Risk cap exceeded for " + Symbol + ": p
+rojected $" + $projRisk + " > cap $" + $riskCapDoll
+ars + ". Aborting.");~0D~0A        return;~0D~0A   
+ }~0D~0A}~0D~0A~0D~0A// === 2) Cancel only BUY work
+ing orders (keep existing protection until we actua
+lly fill) ===~0D~0A$acc = GetAccountObj(Account);~0D
+~0A$acc.CancelOrder("BUY", Symbol, 0);~0D~0A~0D~0A/
+/ === 3) Build entry; snap entry to increment to re
+duce rejects ===~0D~0A// Re-evaluate inc using pxEn
+try (some symbols jump bands)~0D~0A$inc = 0.01;~0D~0A
+if ($pxEntry < 1 || $bid < 1 || $ask < 1) { $inc = 
+0.001; }~0D~0Aif ($pxEntry < 0.25 || $bid < 0.25 ||
+ $ask < 0.25) { $inc = 0.0005; }~0D~0A$pxEntry = Ro
+und($pxEntry, 102, $inc);~0D~0A~0D~0A$order = NewOr
+derObj();~0D~0A$order.Account = Account;~0D~0A$orde
+r.Symbol  = Symbol;~0D~0A$order.Route   = "ARCA";~0D
+~0A$order.Tif     = "DAY+";~0D~0A$order.Side    = "
+B";      // Buy~0D~0A$order.Type    = "L";      // 
+Limit~0D~0A$order.Price   = $pxEntry;~0D~0A$order.S
+hare   = $addShares;~0D~0A$order.Send();~0D~0A~0D~0A
+~0D~0A// === 4) Poll for fill (break when criteria 
+met) ===~0D~0A$i            = 0;~0D~0A$filled      
+= 0;~0D~0A$filledQty = 0;~0D~0Awhile ($i < $maxPoll
+s && $filled == 0) {~0D~0A    Wait($pollMs);~0D~0A 
+   $order.GetInfo();                        // refr
+esh order object~0D~0A    $filledQty = $order.Share
+ - $order.Open; // how many filled so far~0D~0A    
+if ($order.Open == 0) {~0D~0A        $filled = 1; /
+/ full fill~0D~0A        break;~0D~0A    }~0D~0A   
+ if ($acceptPartial == 1 && $filledQty >= $minFillS
+hares) {~0D~0A        $filled = 2; // partial-accep
+ted~0D~0A        break;~0D~0A    }~0D~0A    $i = $i
+ + 1;~0D~0A}~0D~0A~0D~0A// throttle between orders~0D
+~0A$elapsed = $i * $pollMs;~0D~0Aif ($elapsed < $mi
+nDelayMs) {~0D~0A    Wait($minDelayMs - $elapsed);~0D
+~0A}~0D~0A~0D~0A// === 5) If no acceptable fill, ca
+ncel and exit (do not touch existing stops) ===~0D~0A
+if ($filled == 0) {~0D~0A    $order.Cancel();~0D~0A
+    return;~0D~0A}~0D~0A~0D~0A// Optional: if we ac
+cepted a partial and want to freeze size before arm
+ing stop~0D~0Aif ($filled == 2 && $cancelRemainderO
+nPartial == 1) {~0D~0A    $order.Cancel();~0D~0A   
+ // brief wait to let the residual cancel~0D~0A    
+Wait(200);~0D~0A}~0D~0A~0D~0A// === 6) Arm unified 
+1R stop via reusable ~E2~80~9CSet Auto Stop~E2~80~9D
+ script ===~0D~0Aif ($useAutoStop == "Yes") {~0D~0A
+    ExecHotKey("Set Auto Stop");   ~0D~0A}~0D~0A~0D
+~0A// == 7) Build and set take profit trigger (opti
+onal) ==~0D~0A// Only (re)build TP if we are NOT al
+ready profitable on the existing position.~0D~0A// 
+For longs, "profitable" means: BID > avgBefore on t
+he position that existed~0D~0A// before this entry.
+ If we're already green, do NOT reset TP.~0D~0Aif (
+$useTakeProfit == "Yes") {~0D~0A~0D~0A    // If no 
+position beforehand, always set TP (fresh trade)~0D
+~0A    if ($posBefore <= 0) {~0D~0A        ExecHotK
+ey("Set Take Profit");~0D~0A    } else {~0D~0A     
+   // We had a long position before this add. Check
+ profitability.~0D~0A        $bidNow = BID;~0D~0A~0D
+~0A        // If avgBefore is invalid, be conservat
+ive and allow TP reset~0D~0A        if ($avgBefore 
+<= 0) {~0D~0A            ExecHotKey("Set Take Profi
+t");~0D~0A        } else {~0D~0A            // Only
+ reset TP if NOT yet profitable (bid <= avgBefore)~0D
+~0A            if ($bidNow <= $avgBefore) {~0D~0A  
+              ExecHotKey("Set Take Profit");~0D~0A 
+           }~0D~0A            // else: already prof
+itable ~E2~86~92 do nothing, keep existing TP~0D~0A
+        }~0D~0A    }~0D~0A}~0D~0A~0D~0A// --- End -
+--
+Ctrl+,:Set Global Variables:~ 3544:// =====================~0D~0A//  GLOBAL VARIABLES~0D
+~0A// =====================~0D~0A//~0D~0A// IMPORTA
+NT:~0D~0A// - Do NOT change this script's name.~0D~0A
+// - If you update any global variables, either re-
+run this script~0D~0A//   or restart DAS Trader to 
+ensure all globals are refreshed.~0D~0A//~0D~0A~0D~0A
+// Keep track of how many times our one-second scri
+pt as executed~0D~0A$oneSecondScriptCnt = 0;~0D~0A~0D
+~0A// Global abort indicator -- allows us to termin
+ate loops (e.g., waiting for fills)~0D~0A$abort = 0
+;~0D~0A~0D~0A// ---- Feature Toggles ----~0D~0A$use
+SlippageMargin = 1;      // 1=guard stop vs bid wit
+h margin~0D~0A$slipTicksMin          = 2;      // m
+inimum ticks to add as slippage margin~0D~0A$slipSp
+readFrac      = 0.25;  // additional margin = sprea
+d * this fraction~0D~0A$acceptPartial              
+        = 1;   // 1 = accept partial within window;
+ 0 = require full fill~0D~0A$minFillShares         
+            = 1;   // minimum filled shares to acce
+pt when $acceptPartial=1~0D~0A$cancelRemainderOnPar
+tial  = 1;   // 1=cancel remainder before arming st
+op when partial accepted~0D~0A$usePerTradeRiskCap =
+ 1;      // 1=abort if projected risk exceeds cap~0D
+~0A$useSpreadCheck = 1;~0D~0A~0D~0A// =============
+=========================================~0D~0A//  
+1) Risk & Execution Variables~0D~0A// =============
+=========================================~0D~0A~0D~0A
+// Entry offset above/below bid/ask (depending on s
+trategy)~0D~0A// Example: 0.01 = enter 1 cent(s) ab
+ove BID (or below ASK)~0D~0A$entryOffset = 0.03;~0D
+~0A~0D~0A// Exit offset above/below bid/ask (depend
+ing on strategy)~0D~0A// Example: 0.01 = enter 1 ce
+nt(s) above BID (or below ASK)~0D~0A$exitOffset = 0
+.10;~0D~0A~0D~0A// How far your STOP is from entry,
+ per share, in dollars (your "1R")~0D~0A// Example:
+ 0.10 = 10 cents risk per share~0D~0A$stopLossTrigg
+er = 0.10;~0D~0A~0D~0A// How many R~E2~80~99s ahead
+ to place the take-profit alert~0D~0A// Example: 1.
+0 = take profit at +1R~0D~0A$takeProfitFactor = 1.0
+;~0D~0A~0D~0A// What portion of your position to se
+ll/cover when the TP alert hits~0D~0A// Example: 0.
+50 = sell half at TP~0D~0A$takeProfitSize = 0.50;~0D
+~0A~0D~0A// =======================================
+===============~0D~0A//  2) Feature Toggles (Enable
+/Disable Components)~0D~0A// ======================
+================================~0D~0A~0D~0A$useAut
+oStop = "Yes";~0D~0A$useTakeProfit = "Yes";~0D~0A$r
+esetStopOnCancel = "Yes";~0D~0A~0D~0A// ===========
+===========================================~0D~0A//
+  3) Account State (Simulation / Live Modes)~0D~0A/
+/ =================================================
+=====~0D~0A//~0D~0A// You can toggle between sim/li
+ve elsewhere using ACCOUNT_STATE.~0D~0A// These var
+s store your SIM and LIVE account identifiers.~0D~0A
+~0D~0Aif ($ACCOUNT_STATE == "") {~0D~0A    $ACCOUNT
+_STATE = "live";      // default state is SIM mode~0D
+~0A    $TRSIM  = "TR19644";         // your SIM tra
+ding account~0D~0A    $TRLIVE = "19644";           
+// your LIVE trading account~0D~0A}~0D~0A~0D~0A// =
+===================================================
+==~0D~0A//  4) Sizing & Risk Limits~0D~0A// =======
+===============================================~0D~0A
+~0D~0A// Multiplier for position sizing~0D~0A// Exa
+mple: if base clip is 50 shares, QTY_MULT=5 ~E2~86~92
+ 200 shares per entry~0D~0A$qtyMult = 4;~0D~0A~0D~0A
+// Maximum allowed position size (shares)~0D~0A$max
+PositionSize = $qtyMult * 150;~0D~0A~0D~0A// Maximu
+m allowed $ risk *per trade*~0D~0A// Useful for gua
+rding against oversized positions or bad spreads~0D
+~0A$riskCapDollars = 100.00;~0D~0A~0D~0A// Maximum 
+allowed daily loss tracked by comparing~0D~0A// sta
+rt of session equit vs. current equtiy~0D~0A$maxDai
+lyLoss = 100.00;~0D~0A~0D~0A// Order Entry Fill Wai
+t Parameters~0D~0A$pollMs           = 100;         
+    // polling cadence (ms)~0D~0A$maxPolls       = 
+10;              // 20*100ms ~E2~89~88 2s~0D~0A~0D~0A
+ExecHotKey("Initialize Session Equity");
+Alt+Ctrl+S:Switch to Sim:~ 855:// =====================~0D~0A// Switch to Sim Mode
+~0D~0A// =====================~0D~0A~0D~0A// ---- U
+se global STOPLOSS_TRIGGER if set (required) ----~0D
+~0Aif ($ACCOUNT_STATE== "") {~0D~0A    ExecHotkey("
+Set Global Variables");~0D~0A    if ($ACCOUNT_STATE
+== "") {~0D~0A        MsgBox("Global ACCOUNT_STATE 
+is not set. Please check your global variable setti
+ngs.");~0D~0A    return;~0D~0A    }~0D~0A}~0D~0A~0D
+~0Aif  ($ACCOUNT_STATE  == "live") {~0D~0A~0D~0A   
+$pos = GetWindowObj("Positions_Sim");~0D~0A   $pos.
+AlwaysOnTop;;~0D~0A~0D~0A   $pos = GetWindowObj("Po
+sitions_Live");~0D~0A   $pos.AlwaysOnTop;~0D~0A~0D~0A
+   FocusWindow Trades;~0D~0A   SetFilter Account TR
+19644;~0D~0A   DoFilter;~0D~0A~0D~0A   FocusWindow 
+Orders;~0D~0A   SetFilter Account TR19644;~0D~0A   
+DoFilter;~0D~0A~0D~0A   FocusWindow Primary_OE;~0D~0A
+   Account TR19644;~0D~0A~0D~0A   FocusWindow Secon
+dary_OE;~0D~0A   Account TR19644;~0D~0A~0D~0A   $AC
+COUNT_STATE = "sim";~0D~0A~0D~0A   ExecHotKey("Init
+ialize Session Equity");~0D~0A~0D~0A}
+Alt+Ctrl+L:Switch to Live:~ 847:// =====================~0D~0A// Switch to Live Mod
+e~0D~0A// =====================~0D~0A~0D~0A// ---- 
+Use global STOPLOSS_TRIGGER if set (required) ----~0D
+~0Aif ($ACCOUNT_STATE== "") {~0D~0A    ExecHotkey("
+Set Global Variables");~0D~0A    if ($ACCOUNT_STATE
+== "") {~0D~0A        MsgBox("Global ACCOUNT_STATE 
+is not set. Please check your global variable setti
+ngs.");~0D~0A    return;~0D~0A    }~0D~0A}~0D~0A~0D
+~0Aif ($ACCOUNT_STATE == "sim") {~0D~0A~0D~0A   $po
+s = GetWindowObj("Positions_Sim");~0D~0A   $pos.Alw
+aysOnTop;;~0D~0A~0D~0A   $pos = GetWindowObj("Posit
+ions_Live");~0D~0A   $pos.AlwaysOnTop;;~0D~0A~0D~0A
+   FocusWindow Trades;~0D~0A   SetFilter Account 19
+644;~0D~0A   DoFilter;~0D~0A~0D~0A   FocusWindow Or
+ders;~0D~0A   SetFilter Account 19644;~0D~0A   DoFi
+lter;~0D~0A~0D~0A   FocusWindow Primary_OE;~0D~0A  
+ Account 19644;~0D~0A~0D~0A   FocusWindow Secondary
+_OE;~0D~0A   Account 19644;~0D~0A~0D~0A   $ACCOUNT_
+STATE = "live";~0D~0A~0D~0A   ExecHotKey("Initializ
+e Session Equity");~0D~0A~0D~0A}
+Alt+Ctrl+Win+1:Select Primary Order Entry:~ 157:// =====================~0D~0A// Select Primary Mon
+tage~0D~0A// =====================~0D~0A~0D~0AFocus
+Window Primary_OE;~0D~0A$c1 = GetWindowObj("Chart_1
+m");~0D~0A$c1.Symbol = SYMB;
+Ctrl+Shift+T:Set Take Profit:~ 3243:// =====================~0D~0A//  TAKE-PROFIT ALERT
+ BUILDER (FACTOR * R, SIZE-AWARE)~0D~0A//   Uses:~0D
+~0A//     STOPLOSS_TRIGGER     -> per-share risk (1
+R)~0D~0A//     TAKE_PROFIT_FACTOR   -> multiplier o
+n R (e.g., 1.0 = 1R | 2.0 = 2R)~0D~0A//     TAKE_PR
+OFIT_SIZE     -> portion to take at TP (0.25, 0.50,
+ 0.75, etc.)~0D~0A// =====================~0D~0A~0D
+~0AFocusWindow Primary_OE;~0D~0A~0D~0A// ----------
+---------------------------------------------~0D~0A
+// 2) Load profit factor (R multiple)~0D~0A// -----
+--------------------------------------------------~0D
+~0A~0D~0A// Effective TP distance in dollars per sh
+are~0D~0A$tpDist = $stopLossTrigger * $takeProfitFa
+ctor;~0D~0A~0D~0A// -------------------------------
+------------------------~0D~0A// 3) Load current mo
+ntage context (Primary_OE)~0D~0A// ----------------
+---------------------------------------~0D~0A$mySym
+ = Symbol;~0D~0A$myAcc = Account;~0D~0A~0D~0A$accOb
+j = GetAccountObj($myAcc);~0D~0A$posNow = $accObj.G
+etPosition($mySym).Share;~0D~0A$avgNow = AvgCost;~0D
+~0A~0D~0A// No position ~E2~86~92 nothing to alert~0D
+~0Aif ($posNow == 0) { return; }~0D~0A~0D~0A// If A
+vgCost still initializing, fall back to last sale~0D
+~0Aif ($avgNow <= 0) { $avgNow = Last; }~0D~0A~0D~0A
+// ------------------------------------------------
+-------~0D~0A// 4) Compute the target price~0D~0A//
+ --------------------------------------------------
+-----~0D~0A$tpPx = $avgNow;~0D~0Aif ($posNow > 0) {
+~0D~0A    // Long ~E2~86~92 take partial when price
+ goes UP by TP distance~0D~0A    $tpPx = $avgNow + 
+$tpDist;~0D~0A} else {~0D~0A    // Short ~E2~86~92 
+take partial when price goes DOWN by TP distance~0D
+~0A    $tpPx = $avgNow - $tpDist;~0D~0A}~0D~0A~0D~0A
+// ------------------------------------------------
+-------~0D~0A// 5) Tick-size resolution + snapping~0D
+~0A// ---------------------------------------------
+----------~0D~0A$inc = 0.01;~0D~0Aif ($tpPx < 1 || 
+$avgNow < 1)       { $inc = 0.001; }~0D~0Aif ($tpPx
+ < 0.25 || $avgNow < 0.25) { $inc = 0.0005; }~0D~0A
+$tpPx = Round($tpPx, 102, $inc);~0D~0A~0D~0A// ----
+---------------------------------------------------
+~0D~0A// 6) Remove existing TP alert for this symbo
+l/factor~0D~0A// ----------------------------------
+---------------------~0D~0A$alertName = "TP " + $ta
+keProfitFactor + "R Partial " + $mySym;~0D~0A~0D~0A
+$toDel = GetAlertObj($alertName);~0D~0Aif (IsObj($t
+oDel)) { $toDel.Delete(); }~0D~0A~0D~0A// ---------
+----------------------------------------------~0D~0A
+// 7) Build the new alert~0D~0A// -----------------
+--------------------------------------~0D~0A$al = N
+ewAlertObj();~0D~0A$al.Name = $alertName;~0D~0A$al.
+Symb = $mySym;~0D~0A~0D~0A// Longs: wait for price 
+to go ABOVE TP~0D~0A// Shorts: wait for price to go
+ BELOW TP~0D~0Aif ($posNow > 0) {~0D~0A    $al.AddI
+tem("Last Sale", ">", $tpPx);~0D~0A} else {~0D~0A  
+  $al.AddItem("Last Sale", "<", $tpPx);~0D~0A}~0D~0A
+~0D~0A// ------------------------------------------
+-------------~0D~0A// 8) Script executed when the a
+lert triggers~0D~0A// -----------------------------
+--------------------------~0D~0A// This calls the e
+xecutor hotkey that uses TAKE_PROFIT_SIZE.~0D~0Awai
+t(2000);~0D~0A$al.Script =~0D~0A    "SetVar(\"TP_SY
+MBOL\",\"" + $mySym + "\");" +~0D~0A    "FocusWindo
+w Primary_OE;" +~0D~0A    "ExecHotkey(\"Take Profit
+ Executor\");";~0D~0A~0D~0A$al.Speak       = 0;~0D~0A
+$al.PlaySound   = 0;~0D~0A$al.AutoDelete  = 1;~0D~0A
+$al.Loop        = 0;~0D~0A$al.PopupWindow = 0;~0D~0A
+~0D~0A// ------------------------------------------
+-------------~0D~0A// 9) Save / activate alert~0D~0A
+// ------------------------------------------------
+-------~0D~0A$al.Save();~0D~0A$takeProfitSymbol = $
+mySym;
+:Take Profit Executor:~ 4994:// =====================~0D~0A//  PARTIAL TAKE-PROF
+IT EXECUTION (SIZE-AWARE, LONG ONLY)~0D~0A//   Uses
+ TAKE_PROFIT_SIZE global variable~0D~0A//   Flow:~0D
+~0A//     1) Use TP_SYMBOL (if set) to ensure Prima
+ry_OE is on correct symbol~0D~0A//     2) Cancel ex
+isting SELL-side orders (stops/targets)~0D~0A//    
+ 3) Send partial TP SELL order~0D~0A//     4) Class
+ify fill as FULL / PARTIAL / NONE~0D~0A//     5) If
+ FULL fill -> re-arm BE stop for remaining shares (
+no new TP trigger)~0D~0A//        If NOT full  -> r
+e-arm 1R stop AND re-arm TP trigger (if enabled)~0D
+~0A// =====================~0D~0A~0D~0A// 0) Ensure
+ we're working off Primary_OE context for UI~0D~0AF
+ocusWindow Primary_OE;~0D~0A~0D~0A// 2) Get the Pri
+mary_OE montage window~0D~0A$M = GetWindowObj("Prim
+ary_OE");~0D~0Aif (!IsObj($M)) {~0D~0A    MsgBox("T
+ake_Profit_Executor: montage 'Primary_OE' not found
+.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A// 2a) Opti
+onal: symbol override via TP_SYMBOL from alert~0D~0A
+$mySym = $M.Symb;~0D~0A$myAcc = $M.Account;~0D~0A~0D
+~0A// If TP_SYMBOL is set and differs from current 
+montage symbol, try to switch~0D~0Aif ($takeProfitS
+ymbol != "" && $takeProfitSym != $mySym) {~0D~0A   
+ $M.Symb = $takeProfitSymbol;        // attempt to 
+switch montage symbol~0D~0A    Wait(100);          
+                            // allow DAS to update~0D
+~0A    $mySym = $M.Symb;~0D~0A    $myAcc = $M.Accou
+nt;~0D~0A~0D~0A    // Safety: if we still aren't on
+ TP_SYMBOL, abort to avoid touching wrong symbol~0D
+~0A    if ($mySym != $takeProfitSymbol) {~0D~0A    
+    MsgBox("TP Executor: failed to switch Primary_O
+E to " + $takeProfitSymbol +~0D~0A               ".
+ Currently on " + $mySym + ". Aborting.");~0D~0A   
+     return;~0D~0A    }~0D~0A}~0D~0A~0D~0A// 2b) No
+w load position from the (possibly updated) montage
+~0D~0A$posNow = $M.Pos;~0D~0A~0D~0A// Safety: make 
+sure account is valid~0D~0Aif ($myAcc == "") {~0D~0A
+    MsgBox("Take_Profit_Executor: Account is blank 
+on Primary_OE. Aborting.");~0D~0A    return;~0D~0A}
+~0D~0A~0D~0A// LONG-ONLY: No long position? Exit.~0D
+~0Aif ($posNow <= 0) {~0D~0A    return;~0D~0A}~0D~0A
+~0D~0A// 3) Cancel existing SELL-side working order
+s (stops/targets)~0D~0A$accObj = GetAccountObj($myA
+cc);~0D~0A$accObj.CancelOrder("SELL", $mySym, 0);~0D
+~0A~0D~0A// Let cancels register~0D~0AWait(300);~0D
+~0A~0D~0A// Re-read live position after cancels (in
+ case something changed)~0D~0A$posNow = $M.Pos;~0D~0A
+if ($posNow <= 0) {~0D~0A    // Flat now (maybe sto
+p filled while we were messing around) ~E2~86~92 no
+thing to do~0D~0A    return;~0D~0A}~0D~0A~0D~0A// 4
+) Compute shares to take (DAS-safe, long-only)~0D~0A
+$tpRaw   = ($posNow * $takeProfitSize);~0D~0A$takeQ
+ty = Round($tpRaw, 102, 1);      // nearest whole s
+hare~0D~0A~0D~0A// Clamp: never more than current p
+osition~0D~0Aif ($takeQty > $posNow) { $takeQty = $
+posNow; }~0D~0A~0D~0A// Must take at least 1 share 
+if position exists~0D~0Aif ($takeQty < 1) { $takeQt
+y = $posNow; }~0D~0A~0D~0A// 5) Compute exit price 
+(long-only: always SELL at/near bid)~0D~0A$px = $M.
+Bid;~0D~0A~0D~0A// Tick-size handling~0D~0A$inc = 0
+.01;~0D~0Aif ($px < 1)    { $inc = 0.001; }~0D~0Aif
+ ($px < 0.25) { $inc = 0.0005; }~0D~0A$px = Round($
+px, 102, $inc);~0D~0A~0D~0A// 6) Send order using N
+ewOrderObj()~0D~0A$order = NewOrderObj();~0D~0A$ord
+er.Account = $myAcc;  ~0D~0A$order.Symbol  = $mySym
+;~0D~0A$order.Side    = "S";     ~0D~0A$order.Type 
+ = "L";~0D~0A$order.Price = $px;~0D~0A$order.Share 
+= $takeQty;~0D~0A$order.Route = "ARCAL";     ~0D~0A
+$order.Tif   = "DAY+";~0D~0A$order.Send();~0D~0A~0D
+~0A// 7) Poll for fill / partial fill~0D~0A$pollMs 
+         = 100;~0D~0A$maxPolls      = 30;      // u
+p to ~7E3s total~0D~0A$filledState     = 0;       /
+/ 0 = none, 1 = full, 2 = partial~0D~0A~0D~0A$i = 0
+;~0D~0Awhile ($i < $maxPolls) {~0D~0A    Wait($poll
+Ms);~0D~0A    $order.GetInfo();    // refresh order
+ object~0D~0A~0D~0A    // FULL fill: no remaining o
+pen shares on this TP order~0D~0A    if ($order.Ope
+n == 0) {~0D~0A        $filledState = 1;~0D~0A     
+   break;~0D~0A    }~0D~0A~0D~0A    $i = $i + 1;~0D
+~0A}~0D~0A~0D~0A// After polling, classify final st
+ate based on what we see~0D~0A$filledQty = $order.S
+hare - $order.Open;  // how many filled so far~0D~0A
+~0D~0Aif ($filledState != 1) {~0D~0A    if ($filled
+Qty > 0 && $order.Open > 0) {~0D~0A        $filledS
+tate = 2;   // partial fill~0D~0A    } else {~0D~0A
+        $filledState = 0;   // no fill~0D~0A    }~0D
+~0A}~0D~0A~0D~0A// Optional debug~0D~0A// MsgBox("F
+illedState=" + $filledState + "  FilledQty=" + $fil
+ledQty +~0D~0A//        "  Share=" + $order.Share +
+ "  Open=" + $order.Open);~0D~0A~0D~0A// Optional: 
+small throttle between orders~0D~0A$elapsed = $i * 
+$pollMs;~0D~0Aif ($elapsed < 200) {~0D~0A    Wait(2
+00 - $elapsed);~0D~0A}~0D~0A~0D~0A// 8) Decide whic
+h stop to re-arm & whether to re-arm TP trigger~0D~0A
+~0D~0A// Behavior:~0D~0A// - FULL fill (filledState
+ == 1):~0D~0A//       ~E2~86~92 re-arm BE stop only
+~0D~0A// - NOT full (0 = no fill, 2 = partial fill)
+:~0D~0A//       ~E2~86~92 re-arm 1R stop~0D~0A//   
+    ~E2~86~92 and re-arm TP trigger (if enabled)~0D
+~0Aif ($useAutoStop == "Yes") {~0D~0A~0D~0A    if (
+$filledState == 1) {~0D~0A        // FULL TP fill ~E2
+~86~92 lock remaining at BE~0D~0A        ExecHotkey
+("Set Auto Stop BE");~0D~0A    } else {~0D~0A      
+  // No fill OR partial fill ~E2~86~92 re-arm origi
+nal 1R stop~0D~0A        ExecHotkey("Set Auto Stop"
+);~0D~0A    }~0D~0A}~0D~0A~0D~0A// 9) Re-establish 
+take profit alert/trigger if enabled~0D~0A// Only w
+hen we did NOT get a FULL TP fill~0D~0AWait(2000);~0D
+~0Aif ($useTakeProfit == "Yes") {~0D~0A    if ($fil
+ledState != 1) {~0D~0A        ExecHotkey("Set Take 
+Profit");~0D~0A    }~0D~0A}~0D~0A~0D~0A// --- End T
+ake Profit Executor ---
+Ctrl+Shift+B:Set Auto Stop BE 1/1:~ 4013:// =====================~0D~0A//  SET AUTO STOP BE 
+(SLP ABOVE BE)~0D~0A// =====================~0D~0A/
+/~0D~0A// Called from Take_Profit_Executor~0D~0A// 
+Behavior:~0D~0A//   - Protects PARTIAL position (1/
+denominator)~0D~0A//   - If not yet +0.03 in profit
+ ~E2~86~92 place BE LIMIT sell~0D~0A//   - If >= +0
+.03 in profit ~E2~86~92 place SLP stop-limit above 
+BE~0D~0A//~0D~0A// Requirements:~0D~0A//   - Primar
+y_OE montage exists~0D~0A//   - Uses montage object
+ properties (.Symb, .Account, .Pos, .AvgCost)~0D~0A
+//   - Honors USE_AUTO_STOP~0D~0A//~0D~0A~0D~0A// =
+====================~0D~0A// Tunables~0D~0A// =====
+================~0D~0A$portionDenominator = 1;    /
+/ 1 = full, 2 = half, 4 = quarter~0D~0A$beOffset   
+        = 0.03; // BE trigger offset~0D~0A$cancelWa
+itMs       = 1000; // cancel throttle wait~0D~0A~0D
+~0A// =====================~0D~0A// 0) Feature togg
+le~0D~0A// =====================~0D~0Aif ($useAutoS
+top != "Yes") {~0D~0A    return;~0D~0A}~0D~0A~0D~0A
+// =====================~0D~0A// 1) Get Primary_OE 
+montage~0D~0A// =====================~0D~0A$M = Get
+WindowObj("Primary_OE");~0D~0Aif (!IsObj($M)) {~0D~0A
+    MsgBox("Set Auto Stop BE: Primary_OE montage no
+t found.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A// =
+====================~0D~0A// 2) Symbol / account re
+solution~0D~0A// =====================~0D~0A$mySym 
+= $M.Symb;~0D~0A$myAcc = $M.Account;~0D~0A~0D~0A// 
+Optional override from executor~0D~0Aif ($tpSymbol 
+!= "" && $tpSymbol != $mySym) {~0D~0A    $M.Symb = 
+$tpSymbol;~0D~0A    Wait(300); // allow DAS to full
+y update~0D~0A~0D~0A    $mySym = $M.Symb;~0D~0A    
+$myAcc = $M.Account;~0D~0A~0D~0A    if ($mySym != $
+tpSymbol) {~0D~0A        MsgBox("Set Auto Stop BE: 
+failed to switch montage to " + $tpSymbol);~0D~0A  
+      return;~0D~0A    }~0D~0A}~0D~0A~0D~0A// Optio
+nal entry-symbol safety~0D~0Aif ($entrySymbol != ""
+ && $entrySymbol != $mySym) {~0D~0A    MsgBox("Set 
+Auto Stop BE: symbol mismatch (" + $mySym + " vs " 
++ $entrySymbol + ")");~0D~0A    return;~0D~0A}~0D~0A
+~0D~0A// =====================~0D~0A// 3) Read posi
+tion state~0D~0A// =====================~0D~0A$posN
+ow = $M.Pos;~0D~0A$avgNow = $M.AvgCost;~0D~0A~0D~0A
+if ($posNow <= 0) {~0D~0A    return; // flat or sho
+rt~0D~0A}~0D~0Aif ($avgNow <= 0) {~0D~0A    MsgBox(
+"Set Auto Stop BE: AvgCost unavailable for " + $myS
+ym);~0D~0A    return;~0D~0A}~0D~0A~0D~0A// ========
+=============~0D~0A// 4) Tick size logic (single so
+urce of truth)~0D~0A// =====================~0D~0A$
+inc = 0.01;~0D~0Aif ($avgNow < 1)    { $inc = 0.001
+; }~0D~0Aif ($avgNow < 0.25) { $inc = 0.0005; }~0D~0A
+~0D~0A$avgSnap = Round($avgNow, 102, $inc);~0D~0A~0D
+~0A// =====================~0D~0A// 5) Market state
+~0D~0A// =====================~0D~0A$bid = $M.Bid;~0D
+~0Aif ($bid <= 0) {~0D~0A    MsgBox("Set Auto Stop 
+BE: No valid BID for " + $mySym);~0D~0A    return;~0D
+~0A}~0D~0A~0D~0A$beStopTrigger = Round($avgSnap + $
+beOffset, 102, $inc);~0D~0A~0D~0A// ===============
+======~0D~0A// 6) Quantity to protect (PARTIAL)~0D~0A
+// =====================~0D~0A$qtyProtect = $posNow
+ / $portionDenominator;~0D~0Aif ($qtyProtect <= 0) 
+{~0D~0A    return;~0D~0A}~0D~0A~0D~0A// ===========
+==========~0D~0A// 7) ACCOUNT-SCOPED cancel helper~0D
+~0A// =====================~0D~0A$accObj = GetAccou
+ntObj($myAcc);~0D~0A$accObj.CancelOrder("SELL", $my
+Sym, 0);~0D~0AWait($cancelWaitMs);~0D~0A~0D~0A// ==
+===================~0D~0A// 8) NOT YET IN PROFIT ~E2
+~86~92 BE LIMIT SELL~0D~0A// =====================~0D
+~0Aif ($bid < $beStopTrigger) {~0D~0A~0D~0A    // A
+RCAL uses penny ticks~0D~0A    $incBE = 0.01;~0D~0A
+~0D~0A    $px = Round($avgSnap, 102, $incBE);~0D~0A
+~0D~0A    if ($pegToBid == 1 && $bid > $px) {~0D~0A
+        $px = Round($bid, 102, $incBE);~0D~0A    }~0D
+~0A~0D~0A    $o = NewOrderObj();~0D~0A    $o.Accoun
+t = $myAcc;~0D~0A    $o.Symbol  = $mySym;~0D~0A    
+$o.Route   = "ARCAL";~0D~0A    $o.Tif     = "DAY+";
+~0D~0A    $o.Side    = "S";~0D~0A    $o.Type    = "
+L";~0D~0A    $o.Price   = $px;~0D~0A    $o.Share   
+= $qtyProtect;~0D~0A    $o.Send();~0D~0A~0D~0A    r
+eturn;~0D~0A}~0D~0A~0D~0A// =====================~0D
+~0A// 9) IN PROFIT ~E2~86~92 SLP STOP ABOVE BE~0D~0A
+// =====================~0D~0A$stop = Round($avgSna
+p + $beOffset, 102, $inc);~0D~0A$px   = Round($avgS
+nap, 102, $inc);~0D~0A~0D~0A// Ensure SLP validity 
+(limit < stop)~0D~0Aif ($px >= $stop) {~0D~0A    $p
+x = Round($stop - $inc, 102, $inc);~0D~0A}~0D~0A~0D
+~0A$s = NewOrderObj();~0D~0A$s.Account   = $myAcc;~0D
+~0A$s.Symbol    = $mySym;~0D~0A$s.Route     = "STOP
+";~0D~0A$s.Tif       = "DAY+";~0D~0A$s.Side      = 
+"S";~0D~0A$s.Type      = "SLP";~0D~0A$s.StopPrice =
+ $stop;~0D~0A$s.Price     = $px;~0D~0A$s.Share     
+= $qtyProtect;~0D~0A$s.Send();~0D~0A~0D~0Areturn;~0D
+~0A~0D~0A// --- End Set Auto Stop BE ---
+Alt+Ctrl+Win+-:Set 0.10 Stop:~ 139:// How far your STOP is from entry, per share, in d
+ollars (your "1R")~0D~0A// Example: 0.10 = 10 cents
+ risk per share~0D~0A$stopLossTrigger = 0.10;
+Alt+Ctrl+Win+=:Set 0.20 Stop:~ 192:// How far your STOP is from entry, per share, in d
+ollars (your "1R")~0D~0A// Example: 0.20 = 20 cents
+ risk per share~0D~0A$stopLossTrigger = 0.20;~0D~0A
+MsgBox("WARNING: stop loss trigger set to $0.20.");
+Ctrl+A:Sell 1/1 Ask:~ 112:FocusWindow Primary_OE;~0D~0ACXL ALLSYMB;~0D~0AWait
+(100);~0D~0AROUTE="ARCAL";~0D~0APrice=Ask;~0D~0ASha
+re=Pos;~0D~0ATIF=DAY+;~0D~0ASELL=Send;
+Ctrl+S:Sell 1/2 Ask:~ 116:FocusWindow Primary_OE;~0D~0ACXL ALLSYMB;~0D~0AWait
+(100);~0D~0AROUTE="ARCAL";~0D~0APrice=Ask;~0D~0ASha
+re=Pos*0.5;~0D~0ATIF=DAY+;~0D~0ASELL=Send;
+Ctrl+D:Sell 1/4 Ask:~ 117:FocusWindow Primary_OE;~0D~0ACXL ALLSYMB;~0D~0AWait
+(100);~0D~0AROUTE="ARCAL";~0D~0APrice=Ask;~0D~0ASha
+re=Pos*0.25;~0D~0ATIF=DAY+;~0D~0ASELL=Send;
+Ctrl+Z:Sell 1/1 Bid-:~ 124:FocusWindow Primary_OE;~0D~0ACXL ALLSYMB;~0D~0AWait
+(100);~0D~0AROUTE="ARCAL";~0D~0APrice=Bid-$exitOffs
+et;~0D~0AShare=Pos;~0D~0ATIF=DAY+;~0D~0ASELL=Send;
+Ctrl+X:Sell 1/2 Bid-:~ 128:FocusWindow Primary_OE;~0D~0ACXL ALLSYMB;~0D~0AWait
+(100);~0D~0AROUTE="ARCAL";~0D~0APrice=Bid-$exitOffs
+et;~0D~0AShare=Pos*0.5;~0D~0ATIF=DAY+;~0D~0ASELL=Se
+nd;
+Ctrl+C:Sell 1/4 Bid-:~ 129:FocusWindow Primary_OE;~0D~0ACXL ALLSYMB;~0D~0AWait
+(100);~0D~0AROUTE="ARCAL";~0D~0APrice=Bid-$exitOffs
+et;~0D~0AShare=Pos*0.25;~0D~0ATIF=DAY+;~0D~0ASELL=S
+end;
+:Initialize Session Equity:~ 1407:// ==============================~0D~0A// RISK INIT
+ / ACCOUNT BINDING~0D~0A// ========================
+======~0D~0A~0D~0A// Ensure ACCOUNT_STATE is set (s
+im/live)~0D~0Aif ($ACCOUNT_STATE == "") {~0D~0A    
+// Default to sim if somehow unset~0D~0A    $ACCOUN
+T_STATE = "sim";~0D~0A}~0D~0A~0D~0A// Resolve curre
+nt account based on ACCOUNT_STATE~0D~0Aif ($ACCOUNT
+_STATE == "sim") {~0D~0A    $AccName = "TR19644";  
+ // SIM~0D~0A} else {~0D~0A    $AccName = "19644"; 
+    // LIVE~0D~0A}~0D~0A~0D~0A// Get current accoun
+t object~0D~0A$acc = GetAccountObj($AccName);~0D~0A
+~0D~0A// Key names for this account-specific snapsh
+ot / lock~0D~0A$eqKey   = "DAY_EQUITY_START_" + $Ac
+cName;~0D~0A$lockKey = "TRADING_LOCKED_"   + $AccNa
+me;~0D~0A~0D~0A// Try to load existing starting equ
+ity for this account~0D~0A$eqStartStr = GetVar($eqK
+ey);~0D~0A$eqStart    = $eqStartStr * 1;~0D~0A~0D~0A
+// If no saved equity or invalid, snapshot from cur
+rent Equity~0D~0Aif ($eqStartStr == "" || $eqStart 
+<= 0) {~0D~0A    $eqStart = $acc.Equity;~0D~0A    S
+etVar($eqKey, $eqStart);~0D~0A}~0D~0A~0D~0A// Set "
+current" globals used by Timer Event and entry guar
+ds~0D~0ASetVar("DAY_ACC",          $AccName);~0D~0A
+SetVar("DAY_EQUITY_START", $eqStart);~0D~0A~0D~0A//
+ Load this account's lock state (default 0 if unset
+)~0D~0A$lockStr = GetVar($lockKey);~0D~0Aif ($lockS
+tr == "") {~0D~0A    $lockStr = 0;~0D~0A    SetVar(
+$lockKey, 0);~0D~0A}~0D~0ASetVar("TRADING_LOCKED", 
+$lockStr);~0D~0A~0D~0A// Optional: show info~0D~0A/
+/MsgBox("Risk init for " + $AccName +~0D~0A//      
+ "\nStart equity: " + $eqStart +~0D~0A//       "\nL
+ocked: " + $lockStr);
+Alt+Ctrl+E:Session Max Loss Check:~ 657:// ================================~0D~0A// MANUAL 
+STARTING EQUITY INPUT~0D~0A// =====================
+===========~0D~0A~0D~0A// Ask user for starting equ
+ity~0D~0A$val = Input("Enter Starting Equity", "Typ
+e your starting equity amount (e.g., 24500.31)");~0D
+~0A~0D~0A// If user cancelled or left blank, stop~0D
+~0Aif ($val == "" ) {~0D~0A    MsgBox("Starting equ
+ity not set.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A
+// Convert to number~0D~0A$eq = $val * 1;~0D~0A~0D~0A
+// Validate~0D~0Aif ($eq <= 0) {~0D~0A    MsgBox("I
+nvalid equity value: " + $val + ". Must be a positi
+ve number.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A//
+ Store into global variable~0D~0ASetVar("DAY_EQUITY
+_START", $eq);~0D~0A~0D~0A// Inform user~0D~0AMsgBo
+x("Manual starting equity set to: " + $eq);
+Alt+Ctrl+P:Check PnL:~ 1008:// ==============================~0D~0A// SHOW CURR
+ENT TRACKED PnL + LOCK STATE~0D~0A// ==============
+================~0D~0A~0D~0A~0D~0A// ==============
+================~0D~0A// DISPLAY PnL + LOCK STATE~0D
+~0A// ==============================~0D~0A~0D~0A// 
+We already have $accName, $eqStart, $eqNow, $limit 
+from above,~0D~0A// so no need to re-read DAY_ACC/D
+AY_EQUITY_START a second time.~0D~0A~0D~0A// Comput
+e PnL~0D~0A$netPnL = $eqNow - $eqStart;~0D~0A~0D~0A
+// Sign for display~0D~0A$sign = "";~0D~0Aif ($netP
+nL > 0) { $sign = "+"; }~0D~0A~0D~0A// Reload lock 
+state (in case it just changed above)~0D~0A$lockedS
+tr = GetVar($lockKey);~0D~0A$locked    = ($lockedSt
+r * 1);~0D~0A~0D~0A// Human-readable lock state~0D~0A
+$lockMsg = "Unlocked";~0D~0Aif ($locked == 1) { $lo
+ckMsg = "LOCKED (daily loss limit hit)"; }~0D~0A~0D
+~0A// Display popup~0D~0AMsgBox(~0D~0A    "Account:
+ "      + $accName + "\n" +~0D~0A    "Start Equity:
+ $" + $eqStart + "\n" +~0D~0A    "Current Equity: $
+" + $eqNow + "\n" +~0D~0A    "Status: "       + $lo
+ckMsg + "\n\n" +~0D~0A    "PnL: "          + $sign 
++ "$" + $netPnL + "\n" +~0D~0A    "Max Loss: $"    
++ $maxDailyLoss~0D~0A);
+Alt+Ctrl+U:Reset Starting Equity:~ 1322:// ==============================~0D~0A// RESET RIS
+K INIT / ACCOUNT BINDING  (with confirmation)~0D~0A
+// ==============================~0D~0A~0D~0A// Ens
+ure ACCOUNT_STATE is set (sim/live)~0D~0Aif ($ACCOU
+NT_STATE == "") {~0D~0A    // Default to sim if som
+ehow unset~0D~0A    $ACCOUNT_STATE = "sim";~0D~0A}~0D
+~0A~0D~0A// Determine active account~0D~0Aif ($ACCO
+UNT_STATE == "sim") {~0D~0A    $AccName = "TR19644"
+;   // SIM~0D~0A} else {~0D~0A    $AccName = "19644
+";     // LIVE~0D~0A}~0D~0A~0D~0A// --- Confirmatio
+n Prompt ---~0D~0A$answer = Input("Confirm Reset", 
+~0D~0A                "Type YES to reset PnL baseli
+ne for account " + $AccName + ":");~0D~0A~0D~0Aif (
+$answer != "YES") {~0D~0A    MsgBox("Reset aborted.
+ (You typed: '" + $answer + "')");~0D~0A    return;
+~0D~0A}~0D~0A~0D~0A// --- Get account info ---~0D~0A
+$acc = GetAccountObj($AccName);~0D~0A~0D~0A// Build
+ per-account keys~0D~0A$eqKey   = "DAY_EQUITY_START
+_" + $AccName;~0D~0A$lockKey = "TRADING_LOCKED_"   
++ $AccName;~0D~0A~0D~0A// Record new starting equit
+y baseline~0D~0A$eqStart = $acc.Equity;~0D~0ASetVar
+($eqKey, $eqStart);~0D~0A~0D~0A// Update "current" 
+globals used by guard + PnL display~0D~0ASetVar("DA
+Y_ACC",          $AccName);~0D~0ASetVar("DAY_EQUITY
+_START", $eqStart);~0D~0A~0D~0A// Reset lock state~0D
+~0ASetVar($lockKey,        0);~0D~0ASetVar("TRADING
+_LOCKED", 0);~0D~0A~0D~0A// Show result~0D~0AMsgBox
+("Risk baseline RESET for " + $AccName +~0D~0A     
+  "\nStart equity is now: $" + $eqStart +~0D~0A    
+   "\nLock state reset to 0");
+Alt+Ctrl+.:Show Config:~ 1610:// =====================~0D~0A// DISPLAY CONFIGURAT
+ION~0D~0A// =====================~0D~0A~0D~0A// ---
+- Feature Toggles ----~0D~0A$msg =~0D~0A"FEATURE TO
+GGLES\n" +~0D~0A"-----------------\n" +~0D~0A"useSl
+ippageMargin: " + $useSlippageMargin + "\n" +~0D~0A
+"slipTicksMin: " + $slipTicksMin + "\n" +~0D~0A"sli
+pSpreadFrac: " + $slipSpreadFrac + "\n" +~0D~0A"acc
+eptPartial: " + $acceptPartial + "\n" +~0D~0A"minFi
+llShares: " + $minFillShares + "\n" +~0D~0A"cancelR
+emainderOnPartial: " + $cancelRemainderOnPartial + 
+"\n" +~0D~0A"useSpreadCheck:" + $useSpreadCheck + "
+\n" +~0D~0A"usePerTradeRiskCap: " + $usePerTradeRis
+kCap + "\n\n" +~0D~0A~0D~0A// ---- Risk & Execution
+ ----~0D~0A"RISK & EXECUTION\n" +~0D~0A"-----------
+------\n" +~0D~0A"entryOffset: $" + $entryOffset + 
+"\n" +~0D~0A"exitOffset: $" + $exitOffset + "\n" +~0D
+~0A"stopLossTrigger (1R): $" + $stopLossTrigger + "
+\n" +~0D~0A"takeProfitFactor: " + $takeProfitFactor
+ + "R\n" +~0D~0A"takeProfitSize: " + ($takeProfitSi
+ze * 100) + "%\n\n" +~0D~0A~0D~0A// ---- Feature En
+ablement ----~0D~0A"FEATURE ENABLEMENT\n" +~0D~0A"-
+----------------\n" +~0D~0A"useAutoStop: " + $useAu
+toStop + "\n" +~0D~0A"useTakeProfit: " + $useTakePr
+ofit + "\n" +~0D~0A"resetStopOnCancel: " + $resetSt
+opOnCancel + "\n\n" +~0D~0A~0D~0A// ---- Account St
+ate ----~0D~0A"ACCOUNT STATE\n" +~0D~0A"-----------
+------\n" +~0D~0A"ACCOUNT_STATE: " + $ACCOUNT_STATE
+ + "\n" +~0D~0A"SIM Account: " + $TRSIM + "\n" +~0D
+~0A"LIVE Account: " + $TRLIVE + "\n\n" +~0D~0A~0D~0A
+// ---- Sizing & Risk Limits ----~0D~0A"SIZING & RI
+SK LIMITS\n" +~0D~0A"-----------------\n" +~0D~0A"q
+tyMult: " + $qtyMult + "\n" +~0D~0A"maxPositionSize
+: " + $maxPositionSize + " shares\n" +~0D~0A"maxRis
+k (per trade): $" + $riskCapDollars + "\n" +~0D~0A"
+maxDailyLoss: $" + $maxDailyLoss + "\n";~0D~0A~0D~0A
+MsgBox($msg);
+:Cancel All No Stops:~ 1122:// ======================~0D~0A//  CANCEL ALL NON-S
+TOP ORDERS + DELETE TP ALERTS (CURRENT SYMBOL)~0D~0A
+// ======================~0D~0A~0D~0A// 0) Make sur
+e we're on Primary_OE and can read it~0D~0AFocusWin
+dow Primary_OE;~0D~0A$M = GetWindowObj("Primary_OE"
+);~0D~0Aif (!IsObj($M)) {~0D~0A    // If we can't a
+ccess Primary_OE, we can't safely infer symbol/posi
+tion~0D~0A    return;~0D~0A}~0D~0A~0D~0A// Snapshot
+ symbol and position BEFORE we cancel orders~0D~0A$
+mySym   = $M.Symb;~0D~0A$posNow  = $M.Pos;~0D~0A~0D
+~0A// 1) Cancel all orders for current montage symb
+ol (this will include stops)~0D~0ACXL ALLSYMB;~0D~0A
+~0D~0A// 2) Delete all TP alerts for this symbol ov
+er a reasonable R range~0D~0A//    This matches how
+ the TP Alert Builder names them:~0D~0A//    "TP " 
++ <factor> + "R Partial " + <symbol>~0D~0A~0D~0A$i 
+= 1;~0D~0A// i=1..20  ~E2~86~92 factors: 0.5, 1.0, 
+1.5, ..., 10.0~0D~0Awhile ($i <= 20) {~0D~0A    $f 
+= ($i * 0.5);   // 0.5, 1, 1.5, 2, ...~0D~0A~0D~0A 
+   $name = "TP " + $f + "R Partial " + $mySym;~0D~0A
+~0D~0A    $al = GetAlertObj($name);~0D~0A    if (Is
+Obj($al)) {~0D~0A        $al.Delete();~0D~0A    }~0D
+~0A~0D~0A    $i = $i + 1;~0D~0A}~0D~0A~0D~0A// Opti
+onal: confirm~0D~0A// MsgBox("Cancelled all non-sto
+p orders and TP alerts for " + $mySym + ".");~0D~0A
+~0D~0Areturn;
+Alt+Ctrl+Win+T:Toggle Position Window:~ 256:// ==============================~0D~0A// Toggle Vi
+sability of Position Windows~0D~0A// ==============
+================~0D~0A~0D~0ASetFocus Primary_OE;~0D
+~0A~0D~0A$pos = GetWindowObj("Positions_Sim");~0D~0A
+$pos.AlwaysOnTop;;~0D~0A~0D~0A$pos = GetWindowObj("
+Positions_Live");~0D~0A$pos.AlwaysOnTop;
+Alt+Ctrl+Win+[:Set 0.30 Stop:~ 192:// How far your STOP is from entry, per share, in d
+ollars (your "1R")~0D~0A// Example: 0.20 = 20 cents
+ risk per share~0D~0A$stopLossTrigger = 0.30;~0D~0A
+MsgBox("WARNING: stop loss trigger set to $0.30.");
+Alt+Ctrl+Win+]:Toggle STP/TP Feature:~ 307://=======================~0D~0A// Toggle stop loss 
+/ take profit~0D~0A//=======================~0D~0A~0D
+~0Aif ($useAutoStop == "Yes") {~0D~0A   $useAutoSto
+p = "No";~0D~0A   $useTakeProfit = "No";~0D~0A   Ms
+gBox("WARNING: stop loss and take profit triggers d
+isabled.");~0D~0A} else {~0D~0A   $useAutoStop = "Y
+es";~0D~0A   $useTakeProfit = "Yes";~0D~0A}
+:Set 0.05 Stop:~ 139:// How far your STOP is from entry, per share, in d
+ollars (your "1R")~0D~0A// Example: 0.20 = 20 cents
+ risk per share~0D~0A$stopLossTrigger = 0.05;
+Alt+Ctrl+Win+':Toggle Spread Check Feature:~ 214://=======================~0D~0A// Toggle spread che
+ck~0D~0A//=======================~0D~0A~0D~0Aif ($u
+seSpreadCheck== 1) {~0D~0A   $useSpreadCheck=0;~0D~0A
+   MsgBox("WARNING: spread check disabled.");~0D~0A
+} else {~0D~0A   $useSpreadCheck=1;~0D~0A~0D~0A}
+Alt+Ctrl+B:Set Auto Stop BE 1/2:~ 4013:// =====================~0D~0A//  SET AUTO STOP BE 
+(SLP ABOVE BE)~0D~0A// =====================~0D~0A/
+/~0D~0A// Called from Take_Profit_Executor~0D~0A// 
+Behavior:~0D~0A//   - Protects PARTIAL position (1/
+denominator)~0D~0A//   - If not yet +0.03 in profit
+ ~E2~86~92 place BE LIMIT sell~0D~0A//   - If >= +0
+.03 in profit ~E2~86~92 place SLP stop-limit above 
+BE~0D~0A//~0D~0A// Requirements:~0D~0A//   - Primar
+y_OE montage exists~0D~0A//   - Uses montage object
+ properties (.Symb, .Account, .Pos, .AvgCost)~0D~0A
+//   - Honors USE_AUTO_STOP~0D~0A//~0D~0A~0D~0A// =
+====================~0D~0A// Tunables~0D~0A// =====
+================~0D~0A$portionDenominator = 2;    /
+/ 1 = full, 2 = half, 4 = quarter~0D~0A$beOffset   
+        = 0.03; // BE trigger offset~0D~0A$cancelWa
+itMs       = 1000; // cancel throttle wait~0D~0A~0D
+~0A// =====================~0D~0A// 0) Feature togg
+le~0D~0A// =====================~0D~0Aif ($useAutoS
+top != "Yes") {~0D~0A    return;~0D~0A}~0D~0A~0D~0A
+// =====================~0D~0A// 1) Get Primary_OE 
+montage~0D~0A// =====================~0D~0A$M = Get
+WindowObj("Primary_OE");~0D~0Aif (!IsObj($M)) {~0D~0A
+    MsgBox("Set Auto Stop BE: Primary_OE montage no
+t found.");~0D~0A    return;~0D~0A}~0D~0A~0D~0A// =
+====================~0D~0A// 2) Symbol / account re
+solution~0D~0A// =====================~0D~0A$mySym 
+= $M.Symb;~0D~0A$myAcc = $M.Account;~0D~0A~0D~0A// 
+Optional override from executor~0D~0Aif ($tpSymbol 
+!= "" && $tpSymbol != $mySym) {~0D~0A    $M.Symb = 
+$tpSymbol;~0D~0A    Wait(300); // allow DAS to full
+y update~0D~0A~0D~0A    $mySym = $M.Symb;~0D~0A    
+$myAcc = $M.Account;~0D~0A~0D~0A    if ($mySym != $
+tpSymbol) {~0D~0A        MsgBox("Set Auto Stop BE: 
+failed to switch montage to " + $tpSymbol);~0D~0A  
+      return;~0D~0A    }~0D~0A}~0D~0A~0D~0A// Optio
+nal entry-symbol safety~0D~0Aif ($entrySymbol != ""
+ && $entrySymbol != $mySym) {~0D~0A    MsgBox("Set 
+Auto Stop BE: symbol mismatch (" + $mySym + " vs " 
++ $entrySymbol + ")");~0D~0A    return;~0D~0A}~0D~0A
+~0D~0A// =====================~0D~0A// 3) Read posi
+tion state~0D~0A// =====================~0D~0A$posN
+ow = $M.Pos;~0D~0A$avgNow = $M.AvgCost;~0D~0A~0D~0A
+if ($posNow <= 0) {~0D~0A    return; // flat or sho
+rt~0D~0A}~0D~0Aif ($avgNow <= 0) {~0D~0A    MsgBox(
+"Set Auto Stop BE: AvgCost unavailable for " + $myS
+ym);~0D~0A    return;~0D~0A}~0D~0A~0D~0A// ========
+=============~0D~0A// 4) Tick size logic (single so
+urce of truth)~0D~0A// =====================~0D~0A$
+inc = 0.01;~0D~0Aif ($avgNow < 1)    { $inc = 0.001
+; }~0D~0Aif ($avgNow < 0.25) { $inc = 0.0005; }~0D~0A
+~0D~0A$avgSnap = Round($avgNow, 102, $inc);~0D~0A~0D
+~0A// =====================~0D~0A// 5) Market state
+~0D~0A// =====================~0D~0A$bid = $M.Bid;~0D
+~0Aif ($bid <= 0) {~0D~0A    MsgBox("Set Auto Stop 
+BE: No valid BID for " + $mySym);~0D~0A    return;~0D
+~0A}~0D~0A~0D~0A$beStopTrigger = Round($avgSnap + $
+beOffset, 102, $inc);~0D~0A~0D~0A// ===============
+======~0D~0A// 6) Quantity to protect (PARTIAL)~0D~0A
+// =====================~0D~0A$qtyProtect = $posNow
+ / $portionDenominator;~0D~0Aif ($qtyProtect <= 0) 
+{~0D~0A    return;~0D~0A}~0D~0A~0D~0A// ===========
+==========~0D~0A// 7) ACCOUNT-SCOPED cancel helper~0D
+~0A// =====================~0D~0A$accObj = GetAccou
+ntObj($myAcc);~0D~0A$accObj.CancelOrder("SELL", $my
+Sym, 0);~0D~0AWait($cancelWaitMs);~0D~0A~0D~0A// ==
+===================~0D~0A// 8) NOT YET IN PROFIT ~E2
+~86~92 BE LIMIT SELL~0D~0A// =====================~0D
+~0Aif ($bid < $beStopTrigger) {~0D~0A~0D~0A    // A
+RCAL uses penny ticks~0D~0A    $incBE = 0.01;~0D~0A
+~0D~0A    $px = Round($avgSnap, 102, $incBE);~0D~0A
+~0D~0A    if ($pegToBid == 1 && $bid > $px) {~0D~0A
+        $px = Round($bid, 102, $incBE);~0D~0A    }~0D
+~0A~0D~0A    $o = NewOrderObj();~0D~0A    $o.Accoun
+t = $myAcc;~0D~0A    $o.Symbol  = $mySym;~0D~0A    
+$o.Route   = "ARCAL";~0D~0A    $o.Tif     = "DAY+";
+~0D~0A    $o.Side    = "S";~0D~0A    $o.Type    = "
+L";~0D~0A    $o.Price   = $px;~0D~0A    $o.Share   
+= $qtyProtect;~0D~0A    $o.Send();~0D~0A~0D~0A    r
+eturn;~0D~0A}~0D~0A~0D~0A// =====================~0D
+~0A// 9) IN PROFIT ~E2~86~92 SLP STOP ABOVE BE~0D~0A
+// =====================~0D~0A$stop = Round($avgSna
+p + $beOffset, 102, $inc);~0D~0A$px   = Round($avgS
+nap, 102, $inc);~0D~0A~0D~0A// Ensure SLP validity 
+(limit < stop)~0D~0Aif ($px >= $stop) {~0D~0A    $p
+x = Round($stop - $inc, 102, $inc);~0D~0A}~0D~0A~0D
+~0A$s = NewOrderObj();~0D~0A$s.Account   = $myAcc;~0D
+~0A$s.Symbol    = $mySym;~0D~0A$s.Route     = "STOP
+";~0D~0A$s.Tif       = "DAY+";~0D~0A$s.Side      = 
+"S";~0D~0A$s.Type      = "SLP";~0D~0A$s.StopPrice =
+ $stop;~0D~0A$s.Price     = $px;~0D~0A$s.Share     
+= $qtyProtect;~0D~0A$s.Send();~0D~0A~0D~0Areturn;~0D
+~0A~0D~0A// --- End Set Auto Stop BE ---
