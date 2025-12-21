@@ -1,0 +1,125 @@
+{
+  "name": "DAS Script",
+  "scopeName": "source.das",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#variables"
+    },
+    {
+      "include": "#controlKeywords"
+    },
+    {
+      "include": "#commandKeywords"
+    },
+    {
+      "include": "#functionCalls"
+    },
+    {
+      "include": "#properties"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#separators"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.das",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.das",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.das",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.das",
+          "match": "\\b\\d+(?:\\.\\d+)?%?\\b"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "name": "variable.other.das",
+          "match": "\\$[A-Za-z_][A-Za-z0-9_]*"
+        }
+      ]
+    },
+    "controlKeywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.das",
+          "match": "\\b(?i:(if|else|while|for|return|endif|endfor|endwhile))\\b"
+        }
+      ]
+    },
+    "commandKeywords": {
+      "patterns": [
+        {
+          "name": "keyword.other.command.das",
+          "match": "\\b(?i:(buy|sell|sellshort|cover|route|routestop|price|stopprice|stoptype|tif|share|shares|qty|cancel|cancelall|cancelallorders))\\b"
+        }
+      ]
+    },
+    "functionCalls": {
+      "patterns": [
+        {
+          "name": "support.function.das",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\s*(?=\\()"
+        }
+      ]
+    },
+    "properties": {
+      "patterns": [
+        {
+          "name": "variable.other.property.das",
+          "match": "\\.[A-Za-z_][A-Za-z0-9_]*"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.das",
+          "match": "(\\|\\||&&|==|!=|<=|>=|<|>|\\+=|-=|\\*=|/=|=|\\+|-|\\*|/|%|!)"
+        }
+      ]
+    },
+    "separators": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.statement.das",
+          "match": ";"
+        }
+      ]
+    }
+  }
+}

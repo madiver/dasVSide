@@ -3,11 +3,17 @@
 import * as vscode from "vscode";
 import { runBuildHotkeyFile } from "./commands/buildHotkeyFile";
 import { runPlaceholderCommand } from "./commands/placeholderCommand";
+import { ExecHotkeySymbolProvider } from "./language/execHotkeySymbolProvider";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
     console.log("DAS Hotkey Tools extension activated.");
+
+    const dasSymbolProvider = vscode.languages.registerDocumentSymbolProvider(
+        { language: "das", scheme: "file" },
+        new ExecHotkeySymbolProvider()
+    );
 
     const placeholderDisposable = vscode.commands.registerCommand(
         "dasHotkeyTools.placeholderCommand",
@@ -19,7 +25,11 @@ export function activate(context: vscode.ExtensionContext) {
         runBuildHotkeyFile
     );
 
-    context.subscriptions.push(placeholderDisposable, buildDisposable);
+    context.subscriptions.push(
+        dasSymbolProvider,
+        placeholderDisposable,
+        buildDisposable
+    );
 }
 
 // This method is called when your extension is deactivated

@@ -24,3 +24,5 @@ vsc-extension-quickstart.md
 keymap.yaml
 ._*
 !out/**
+!syntaxes/**
+!language-configuration.json

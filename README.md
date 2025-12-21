@@ -19,6 +19,14 @@ format validation.
 4. Run `DAS: Build Hotkey File` from the Command Palette.
 5. Confirm the Hotkey.htk output file is created at the configured path.
 
+## Phase 3 Editor Experience
+
+1. Open any `.das` file to activate the DAS language mode.
+2. Confirm syntax highlighting for commands, variables, numbers, strings, and comments.
+3. Use Outline or Go to Symbol to navigate ExecHotkey references.
+4. Verify bracket matching and folding on control flow blocks.
+5. Confirm no auto-formatting or whitespace changes occur on save.
+
 ## Settings
 
 Add the settings to your workspace `settings.json`:
