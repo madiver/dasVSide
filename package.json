@@ -30,6 +30,26 @@
         "title": "DAS: Build Hotkey File"
       }
     ],
+    "languages": [
+      {
+        "id": "das",
+        "aliases": [
+          "DAS",
+          "DAS Script"
+        ],
+        "extensions": [
+          ".das"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "das",
+        "scopeName": "source.das",
+        "path": "./syntaxes/das.tmLanguage.json"
+      }
+    ],
     "configuration": {
       "title": "DAS Hotkey Tools",
       "properties": {

@@ -1,0 +1,16 @@
+{
+  "comments": {
+    "lineComment": "//"
+  },
+  "brackets": [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"]
+  ],
+  "folding": {
+    "markers": {
+      "start": "(?i)^\\s*(if|for|while)\\b",
+      "end": "(?i)^\\s*(endif|endfor|endwhile)\\b"
+    }
+  }
+}
