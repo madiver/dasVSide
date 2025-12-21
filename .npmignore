@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+build/
+coverage/
+*.vsix
+
+# Tooling
+.vscode/
+.vscode-test/
+.specify/
+.codex/
+
+# Specs and docs artifacts
+specs/
+
+# Misc
+*.log
+.env
+.env.*
