@@ -8,6 +8,7 @@ export default [{
         "build/",
         "coverage/",
         "*.vsix",
+        "*.min.js",
     ],
 }, {
     files: ["**/*.ts"],

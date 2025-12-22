@@ -27,6 +27,12 @@ format validation.
 4. Verify bracket matching and folding on control flow blocks.
 5. Confirm no auto-formatting or whitespace changes occur on save.
 
+## Phase 4 Linting
+
+1. Open a `.das` file and confirm inline lint diagnostics appear for risky patterns.
+2. Run `DAS: Lint Scripts` to scan the workspace on demand.
+3. Adjust lint settings in workspace `settings.json` and confirm diagnostics update.
+
 ## Settings
 
 Add the settings to your workspace `settings.json`:
@@ -34,7 +40,13 @@ Add the settings to your workspace `settings.json`:
 ```json
 {
   "dasHotkeyTools.outputPath": "C:\\temp\\Hotkey.htk",
-  "dasHotkeyTools.templateVariables": {}
+  "dasHotkeyTools.templateVariables": {},
+  "dasHotkeyTools.linting.enabled": true,
+  "dasHotkeyTools.linting.debounceMs": 400,
+  "dasHotkeyTools.linting.maxFiles": 200,
+  "dasHotkeyTools.linting.maxChainDepth": 8,
+  "dasHotkeyTools.linting.lintOnBuild": false,
+  "dasHotkeyTools.linting.ruleOverrides": {}
 }
 ```
 

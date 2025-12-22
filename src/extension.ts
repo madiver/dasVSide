@@ -2,13 +2,17 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 import { runBuildHotkeyFile } from "./commands/buildHotkeyFile";
+import { runLintScripts } from "./commands/lintScripts";
 import { runPlaceholderCommand } from "./commands/placeholderCommand";
 import { ExecHotkeySymbolProvider } from "./language/execHotkeySymbolProvider";
+import { registerLinting } from "./linting/diagnostics";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
     console.log("DAS Hotkey Tools extension activated.");
+
+    registerLinting(context);
 
     const dasSymbolProvider = vscode.languages.registerDocumentSymbolProvider(
         { language: "das", scheme: "file" },
@@ -25,10 +29,16 @@ export function activate(context: vscode.ExtensionContext) {
         runBuildHotkeyFile
     );
 
+    const lintDisposable = vscode.commands.registerCommand(
+        "dasHotkeyTools.lintScripts",
+        runLintScripts
+    );
+
     context.subscriptions.push(
         dasSymbolProvider,
         placeholderDisposable,
-        buildDisposable
+        buildDisposable,
+        lintDisposable
     );
 }
 

@@ -39,6 +39,7 @@ __pycache__/
 venv/
 
 # Editor settings
+.vscode/
 .idea/
 *.iml
 

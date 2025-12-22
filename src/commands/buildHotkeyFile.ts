@@ -11,6 +11,8 @@ import {
     HotkeyToolsError,
     ValidationError,
 } from "../compiler/errors";
+import { loadLintConfig } from "../linting/config";
+import { getLintController } from "../linting/diagnostics";
 
 const OVERWRITE_OPTION = "Overwrite";
 
@@ -100,6 +102,28 @@ export async function runBuildHotkeyFile(): Promise<void> {
         const settings = loadSettings();
         logOutput("Validating workspace inputs.");
         await ensureWorkspaceInputs();
+
+        const lintConfig = loadLintConfig();
+        if (lintConfig.enabled && lintConfig.lintOnBuild) {
+            logOutput("Running advisory linting before build.");
+            try {
+                const controller = getLintController();
+                if (controller) {
+                    const findings = await controller.runWorkspaceLint();
+                    logOutput(
+                        `Linting completed with ${findings} issue(s) (warnings only).`
+                    );
+                } else {
+                    logOutput("Linting controller not available.");
+                }
+            } catch (lintError) {
+                const details =
+                    lintError instanceof Error
+                        ? lintError.message
+                        : String(lintError);
+                logOutput(`Linting skipped due to error: ${details}`);
+            }
+        }
 
         logOutput("Rendering templates.");
         const rendered = renderTemplate(
