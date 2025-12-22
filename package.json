@@ -14,10 +14,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:dasHotkeyTools.placeholderCommand",
-    "onCommand:dasHotkeyTools.buildHotkeyFile"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -28,6 +24,10 @@
       {
         "command": "dasHotkeyTools.buildHotkeyFile",
         "title": "DAS: Build Hotkey File"
+      },
+      {
+        "command": "dasHotkeyTools.lintScripts",
+        "title": "DAS: Lint Scripts"
       }
     ],
     "languages": [
@@ -63,6 +63,45 @@
           "type": "object",
           "default": {},
           "markdownDescription": "Placeholder values used in hotkey templates. Values must be strings and should avoid colons when used for hotkey names.",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "scope": "resource"
+        },
+        "dasHotkeyTools.linting.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable advisory linting for DAS scripts.",
+          "scope": "resource"
+        },
+        "dasHotkeyTools.linting.debounceMs": {
+          "type": "number",
+          "default": 400,
+          "markdownDescription": "Debounce interval in milliseconds for linting on edit.",
+          "scope": "resource"
+        },
+        "dasHotkeyTools.linting.maxFiles": {
+          "type": "number",
+          "default": 200,
+          "markdownDescription": "Maximum number of .das files to lint per run.",
+          "scope": "resource"
+        },
+        "dasHotkeyTools.linting.maxChainDepth": {
+          "type": "number",
+          "default": 8,
+          "markdownDescription": "Maximum ExecHotkey call depth before a warning is emitted.",
+          "scope": "resource"
+        },
+        "dasHotkeyTools.linting.lintOnBuild": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Run advisory linting during builds (warnings only, non-blocking).",
+          "scope": "resource"
+        },
+        "dasHotkeyTools.linting.ruleOverrides": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Override lint rule severities per rule id (info, warning, error, off).",
           "additionalProperties": {
             "type": "string"
           },
