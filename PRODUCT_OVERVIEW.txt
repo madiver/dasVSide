@@ -1,4 +1,4 @@
-AS HOTKEY TOOLS
+﻿AS HOTKEY TOOLS
 Third-Party Script IDE and Build System for DAS Trader Pro
 
 Document Type: Product and Technical Specification
@@ -7,7 +7,7 @@ Primary Platform: Visual Studio Code Extension
 Target Users: Advanced DAS Trader Pro users (developers and non-developers)
 Out of Scope: Trading execution, CMD API trading, market data access
 
-⸻
+â¸»
 
 PROBLEM STATEMENT
 
@@ -16,7 +16,7 @@ This format encodes entire scripts on a single physical line, uses inline newlin
 
 Advanced users frequently maintain dozens or hundreds of hotkeys, reuse logic via ExecHotkey calls, implement risk controls, and maintain separate SIM and LIVE workflows. The current tooling does not scale for these use cases and introduces unnecessary operational and trading risk.
 
-⸻
+â¸»
 
 GOALS
 
@@ -34,7 +34,7 @@ The tool must support round-trip conversion from existing Hotkey.htk files back 
 
 The tool must be easily packaged and distributed to non-developer users with minimal friction.
 
-⸻
+â¸»
 
 NON-GOALS
 
@@ -50,7 +50,7 @@ The tool will not replace DAS Trader Pro.
 
 This is a build, tooling, and safety system only.
 
-⸻
+â¸»
 
 HIGH-LEVEL ARCHITECTURE
 
@@ -62,7 +62,7 @@ The Hotkey.htk file is manually imported into DAS Trader Pro.
 
 Hotkey.htk is treated as a compiled artifact, not a source file.
 
-⸻
+â¸»
 
 TARGET PLATFORM
 
@@ -74,7 +74,7 @@ Distribution is via the Visual Studio Code Marketplace or as a .vsix file.
 
 An optional command-line interface may be bundled inside the extension and used internally.
 
-⸻
+â¸»
 
 TECHNOLOGY STACK REQUIREMENTS
 
@@ -100,7 +100,7 @@ All configuration must be file-based and stored within the workspace.
 
 The extension must function fully offline after installation.
 
-⸻
+â¸»
 
 PROHIBITED TECHNOLOGIES
 
@@ -116,7 +116,7 @@ The implementation must not require Docker, WSL, or virtualization.
 
 The implementation must not use Electron or a standalone desktop application as the primary delivery mechanism.
 
-⸻
+â¸»
 
 PROJECT STRUCTURE
 
@@ -138,7 +138,7 @@ out
 Hotkey.htk
 README.md
 
-⸻
+â¸»
 
 SOURCE FILE FORMAT (.das)
 
@@ -157,25 +157,24 @@ Route=MARKET;
 TIF=DAY+;
 BUY;
 
-⸻
+â¸»
 
 KEY BINDING CONFIGURATION (keymap.yaml)
 
 Key bindings and metadata are stored separately from script logic.
 
-Each entry defines a unique id, key combination, label, flags, and path to the script file.
+Each entry defines a unique id, key combination, label, and path to the script file.
 
 Example:
 
 id: buy_market
 key: Ctrl+Shift+B
 label: Buy Market
-flags: “~ 1107”
 script: hotkeys/trading/buy_market.das
 
 Multiple keymaps may be supported (for example SIM vs LIVE).
 
-⸻
+â¸»
 
 INTERNAL REPRESENTATION
 
@@ -187,32 +186,36 @@ Hotkey
 id: string
 key: string
 label: string
-flags: string
+scriptLength: number (UTF-8 byte length)
 scriptText: decoded multiline text
 
 Responsibilities of the internal representation include line ending normalization, whitespace cleanup, script ordering, and dependency tracking for ExecHotkey calls.
 
-⸻
+â¸»
 
 ENCODING AND COMPILATION RULES
 
-Newlines in source files are encoded as 0D0A in Hotkey.htk.
+Newlines in source files are encoded as ~0D~0A tokens in Hotkey.htk.
+Non-ASCII bytes are encoded as ~HH tokens.
 
 Each output line follows the format:
 
-Key:Label:Flags:EncodedScript
+Key:Label:Length:EncodedScript
+
+Encoded scripts are wrapped into fixed-width physical lines (51 characters per line)
+to match Hotkey.htk output; lines may extend to keep ~HH tokens intact.
 
 Example output:
 
-Ctrl+Shift+B:Buy Market:~ 1107:Route=MARKET;0D0ATIF=DAY+;0D0ABUY;
+Ctrl+Shift+B:Buy Market:~ 1107:Route=MARKET;~0D~0ATIF=DAY+;~0D~0ABUY;
 
-⸻
+â¸»
 
 IMPORT AND ROUND-TRIP SUPPORT
 
 The tool must support importing an existing Hotkey.htk file.
 
-Importing decodes 0D0A into real newlines.
+Importing decodes ~0D~0A into real newlines.
 
 Scripts are split into individual .das files.
 
@@ -222,7 +225,7 @@ Comments and formatting must be preserved as closely as possible.
 
 No semantic changes may be introduced during import.
 
-⸻
+â¸»
 
 VISUAL STUDIO CODE EXTENSION FEATURES
 
@@ -237,7 +240,7 @@ Decodes Hotkey.htk into a project structure
 DAS: Lint Scripts
 Runs static analysis and safety checks
 
-⸻
+â¸»
 
 LANGUAGE SUPPORT
 
@@ -247,7 +250,7 @@ Syntax highlighting is provided.
 
 Comments and bracket matching are supported.
 
-⸻
+â¸»
 
 STATIC ANALYSIS AND SAFETY LINTING
 
@@ -257,7 +260,7 @@ Example rules include warnings for CXL ALL, SEND=Reverse, PANIC usage, missing I
 
 Errors may be raised for definite logical issues such as circular hotkey dependencies.
 
-⸻
+â¸»
 
 ENVIRONMENT AWARENESS
 
@@ -270,7 +273,7 @@ Example:
 profile: SIM
 allowDangerousCommands: true
 
-⸻
+â¸»
 
 VERSION CONTROL CONSIDERATIONS
 
@@ -280,7 +283,7 @@ Hotkey.htk may be committed or ignored at user discretion.
 
 Build output must be deterministic to avoid unnecessary diffs.
 
-⸻
+â¸»
 
 SECURITY AND TRUST MODEL
 
@@ -294,7 +297,7 @@ All operations are local file transformations.
 
 User-facing documentation must clearly state that the tool only generates hotkey files.
 
-⸻
+â¸»
 
 DISTRIBUTION AND PACKAGING
 
@@ -306,11 +309,11 @@ A changelog must be maintained.
 
 An open-source license such as MIT or Apache 2.0 is recommended.
 
-⸻
+â¸»
 
 PHASED IMPLEMENTATION PLAN
 
-PHASE 0 – FOUNDATION AND PROJECT SETUP
+PHASE 0 â€“ FOUNDATION AND PROJECT SETUP
 
 Objective: Establish a stable development and packaging foundation.
 
@@ -318,9 +321,9 @@ Scope includes scaffolding the VS Code extension, configuring TypeScript, verify
 
 Exit criteria: extension runs, packages, and installs cleanly.
 
-⸻
+â¸»
 
-PHASE 1 – CORE COMPILER (MVP)
+PHASE 1 â€“ CORE COMPILER (MVP)
 
 Objective: Compile independent .das files into a valid Hotkey.htk.
 
@@ -328,9 +331,9 @@ Scope includes encoder implementation, keymap.yaml parsing, deterministic build 
 
 Exit criteria: generated Hotkey.htk imports and functions correctly in DAS.
 
-⸻
+â¸»
 
-PHASE 2 – IMPORT AND ROUND-TRIP SUPPORT
+PHASE 2 â€“ IMPORT AND ROUND-TRIP SUPPORT
 
 Objective: Migrate existing users.
 
@@ -338,19 +341,19 @@ Scope includes decoding Hotkey.htk into .das files and keymap.yaml.
 
 Exit criteria: import-build-import produces no functional drift.
 
-⸻
+â¸»
 
-PHASE 3 – LANGUAGE SUPPORT AND EDITOR EXPERIENCE
+PHASE 3 â€“ LANGUAGE SUPPORT AND EDITOR EXPERIENCE
 
 Objective: Make script editing comfortable in VS Code.
 
 Scope includes syntax highlighting, comments, indentation, and navigation.
 
-Exit criteria: editing experience is clearly superior to DAS’s built-in editor.
+Exit criteria: editing experience is clearly superior to DASâ€™s built-in editor.
 
-⸻
+â¸»
 
-PHASE 4 – STATIC ANALYSIS AND SAFETY LINTING
+PHASE 4 â€“ STATIC ANALYSIS AND SAFETY LINTING
 
 Objective: Surface trading risk before scripts reach DAS.
 
@@ -358,19 +361,16 @@ Scope includes pattern-based lint rules, diagnostics, and warnings.
 
 Exit criteria: linting catches real issues without excessive noise.
 
-⸻
+â¸»
 
-PHASE 5 – ENVIRONMENT PROFILES (SIM VS LIVE)
+PHASE 5 â€“ CORE COMPILER AND HOTKEY AGGREGATION, 
 
-Objective: Support safe differentiation between SIM and LIVE workflows.
+Authoritative compilation of .das + keymap.yaml â†’ Hotkey.htk
+The only phase that emits Hotkey.htk
 
-Scope includes profile-specific linting and warnings.
+â¸»
 
-Exit criteria: users can switch profiles without editing scripts.
-
-⸻
-
-PHASE 6 – DEPENDENCY GRAPH AND NAVIGATION
+PHASE 6 â€“ DEPENDENCY GRAPH AND NAVIGATION
 
 Objective: Make large hotkey systems understandable.
 
@@ -378,9 +378,9 @@ Scope includes ExecHotkey call graphs, dead code detection, and cycle detection.
 
 Exit criteria: users can refactor confidently.
 
-⸻
+â¸»
 
-PHASE 7 – PACKAGING, POLISH, AND PUBLIC RELEASE
+PHASE 7 â€“ PACKAGING, POLISH, AND PUBLIC RELEASE
 
 Objective: Prepare for non-developer adoption.
 
@@ -388,15 +388,15 @@ Scope includes documentation, onboarding, marketplace publishing, and versioning
 
 Exit criteria: non-developers can install and use the tool with one click.
 
-⸻
+â¸»
 
-PHASE 8 – OPTIONAL FUTURE EXTENSIONS
+PHASE 8 â€“ OPTIONAL FUTURE EXTENSIONS
 
 Objective: Explore advanced capabilities without bloating the core.
 
 Examples include CLI-only workflows, LSP extraction, or premium safety packs.
 
-⸻
+â¸»
 
 OUT OF SCOPE
 
@@ -406,7 +406,7 @@ Runtime debugging
 DAS window inspection
 Order execution validation
 
-⸻
+â¸»
 
 SUCCESS CRITERIA
 
@@ -421,3 +421,4 @@ Safety issues are surfaced before import.
 Advanced DAS users adopt the tool organically.
 
 Non-developer users can install and use the tool via the VS Code Marketplace without additional setup.
+

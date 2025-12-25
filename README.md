@@ -1,8 +1,9 @@
-# DAS Hotkey Tools (Phase 1)
+# DAS Hotkey Tools (Phase 5)
 
-Phase 1 delivers the first usable workflow for DAS Hotkey Tools. The extension
-generates a Hotkey.htk file from VS Code using literal templates and strict
-format validation.
+Phase 5 delivers the core compiler workflow for DAS Hotkey Tools. The extension
+compiles `keymap.yaml` and `.das` scripts into a single deterministic
+`Hotkey.htk` file. `Hotkey.htk` is treated as a compiled artifact and is only
+written by the build command (with overwrite confirmation).
 
 ## Development (Extension Host)
 
@@ -11,13 +12,28 @@ format validation.
 3. Open the Command Palette and run `DAS: Build Hotkey File`.
 4. Confirm the success toast and output path.
 
-## Phase 1 Quickstart
+## Phase 5 Quickstart
 
-1. Open a workspace that contains at least one `.das` file.
-2. Create a `keymap.yaml` file in the workspace (contents can be empty for Phase 1).
+1. Open a workspace that contains one or more `.das` files.
+2. Create a `keymap.yaml` file in the workspace with entries that include `id`,
+   `key`, `label`, and `scriptPath`.
 3. Set the output path in settings (example below).
 4. Run `DAS: Build Hotkey File` from the Command Palette.
-5. Confirm the Hotkey.htk output file is created at the configured path.
+5. Confirm the `Hotkey.htk` output file is created at the configured path.
+6. Re-run the command and confirm the output is byte-for-byte identical.
+
+## Compiler Behavior & Limitations
+
+- `keymap.yaml` is the source of truth for hotkey metadata; script contents are
+  never rewritten.
+- Duplicate ids or key combinations fail compilation with actionable errors.
+- Missing, empty, or malformed scripts fail compilation and no output is written.
+- Unreferenced `.das` files emit warnings but do not block output.
+- Linting is advisory only and never blocks compilation.
+- Script length is computed as the UTF-8 byte length of decoded script text
+  (CRLF normalized) and written in the `Key:Label:Length:Script` segment.
+- Encoded script output is wrapped to match Hotkey.htk physical line breaks and
+  never splits `~HH` tokens across lines.
 
 ## Phase 3 Editor Experience
 
@@ -51,7 +67,8 @@ Add the settings to your workspace `settings.json`:
 ```
 
 - `dasHotkeyTools.outputPath` must be a writable file path.
-- `dasHotkeyTools.templateVariables` provides placeholder values for templates.
+- `dasHotkeyTools.templateVariables` remains for legacy template workflows and
+  is ignored by the Phase 5 compiler.
 
 ## Package
 

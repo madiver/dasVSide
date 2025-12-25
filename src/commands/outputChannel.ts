@@ -16,3 +16,8 @@ export function logOutput(message: string): void {
     const channel = getOutputChannel();
     channel.appendLine(message);
 }
+
+export function logSuccess(message: string): void {
+    const channel = getOutputChannel();
+    channel.appendLine(`[SUCCESS] ${message}`);
+}

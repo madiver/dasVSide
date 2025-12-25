@@ -1,0 +1,110 @@
+openapi: 3.0.3
+info:
+  title: Hotkey Compiler (Internal)
+  version: 1.0.0
+  description: |
+    Conceptual contract for the internal compiler action invoked by the VS Code
+    command. This is documentation-only and does not imply a network service.
+paths:
+  /compile:
+    post:
+      summary: Compile keymap.yaml and .das scripts into Hotkey.htk
+      operationId: compileHotkeys
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - workspaceRoot
+                - outputPath
+              properties:
+                workspaceRoot:
+                  type: string
+                  description: Absolute path to the workspace root.
+                outputPath:
+                  type: string
+                  description: Absolute path for the Hotkey.htk output file.
+      responses:
+        "200":
+          description: Compilation completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - outputPath
+                  - hotkeys
+                  - warnings
+                  - errors
+                properties:
+                  outputPath:
+                    type: string
+                  hotkeys:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Hotkey"
+                  warnings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CompileIssue"
+                  errors:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CompileIssue"
+        "400":
+          description: Compilation failed due to validation errors.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - errors
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CompileIssue"
+
+components:
+  schemas:
+    Hotkey:
+      type: object
+      required:
+        - id
+        - key
+        - label
+        - scriptText
+        - scriptLength
+        - sourcePath
+      properties:
+        id:
+          type: string
+        key:
+          type: string
+        label:
+          type: string
+        scriptText:
+          type: string
+        scriptLength:
+          type: integer
+          description: UTF-8 byte length of decoded script text (CRLF line endings).
+        sourcePath:
+          type: string
+    CompileIssue:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        id:
+          type: string
+        key:
+          type: string
+        sourcePath:
+          type: string
