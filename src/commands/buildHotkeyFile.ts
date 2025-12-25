@@ -1,11 +1,8 @@
 import * as vscode from "vscode";
 import { promises as fs } from "fs";
 import { loadSettings } from "../config/settings";
-import { HOTKEY_TEMPLATE_TEXT } from "../templates/hotkeyTemplates";
-import { renderTemplate } from "../compiler/renderer";
-import { validateRenderedOutput } from "../compiler/validator";
-import { writeHotkeyFile } from "../compiler/writer";
-import { getOutputChannel, logOutput } from "./outputChannel";
+import { compileHotkeys } from "../compiler/compileHotkeys";
+import { getOutputChannel, logOutput, logSuccess } from "./outputChannel";
 import {
     ConfigurationError,
     HotkeyToolsError,
@@ -16,35 +13,14 @@ import { getLintController } from "../linting/diagnostics";
 
 const OVERWRITE_OPTION = "Overwrite";
 
-async function ensureWorkspaceInputs(): Promise<void> {
+function getWorkspaceRoot(): string {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) {
         throw new ConfigurationError(
             "Open a workspace folder before building the Hotkey file."
         );
     }
-
-    const dasFiles = await vscode.workspace.findFiles(
-        "**/*.das",
-        "**/{node_modules,.git}/**",
-        1
-    );
-    if (dasFiles.length === 0) {
-        throw new ValidationError(
-            "No .das source files were found in the workspace."
-        );
-    }
-
-    const keymapFiles = await vscode.workspace.findFiles(
-        "**/keymap.yaml",
-        "**/{node_modules,.git}/**",
-        1
-    );
-    if (keymapFiles.length === 0) {
-        throw new ValidationError(
-            "No keymap.yaml file was found in the workspace."
-        );
-    }
+    return folders[0].uri.fsPath;
 }
 
 async function confirmOverwrite(outputPath: string): Promise<boolean> {
@@ -81,6 +57,19 @@ function reportError(error: unknown): void {
 
     if (error instanceof HotkeyToolsError) {
         userMessage = error.userMessage;
+        if (error.id || error.key || error.sourcePath) {
+            const parts: string[] = [];
+            if (error.id) {
+                parts.push(`id=${error.id}`);
+            }
+            if (error.key) {
+                parts.push(`key=${error.key}`);
+            }
+            if (error.sourcePath) {
+                parts.push(`path=${error.sourcePath}`);
+            }
+            channel.appendLine(`[CONTEXT] ${parts.join(" | ")}`);
+        }
         if (error.message && error.message !== error.userMessage) {
             channel.appendLine(`[DETAIL] ${error.message}`);
         }
@@ -100,8 +89,7 @@ export async function runBuildHotkeyFile(): Promise<void> {
     try {
         logOutput("Loading settings.");
         const settings = loadSettings();
-        logOutput("Validating workspace inputs.");
-        await ensureWorkspaceInputs();
+        const workspaceRoot = getWorkspaceRoot();
 
         const lintConfig = loadLintConfig();
         if (lintConfig.enabled && lintConfig.lintOnBuild) {
@@ -125,14 +113,6 @@ export async function runBuildHotkeyFile(): Promise<void> {
             }
         }
 
-        logOutput("Rendering templates.");
-        const rendered = renderTemplate(
-            HOTKEY_TEMPLATE_TEXT,
-            settings.templateVariables
-        );
-        logOutput("Validating generated output.");
-        validateRenderedOutput(rendered, { templateText: HOTKEY_TEMPLATE_TEXT });
-
         logOutput("Checking output path for overwrite.");
         const shouldWrite = await confirmOverwrite(settings.outputPath);
         if (!shouldWrite) {
@@ -143,10 +123,25 @@ export async function runBuildHotkeyFile(): Promise<void> {
             return;
         }
 
-        logOutput("Writing Hotkey file to disk.");
-        await writeHotkeyFile(settings.outputPath, rendered);
+        logOutput("Compiling Hotkey file.");
+        const result = await compileHotkeys({
+            workspaceRoot,
+            outputPath: settings.outputPath,
+        });
 
-        logOutput(`Hotkey file generated at ${settings.outputPath}`);
+        if (result.warnings.length > 0) {
+            logOutput(
+                `Compilation completed with ${result.warnings.length} warning(s).`
+            );
+            result.warnings.forEach((warning) => {
+                const details = warning.sourcePath
+                    ? `${warning.message} (${warning.sourcePath})`
+                    : warning.message;
+                channel.appendLine(`[WARN] ${details}`);
+            });
+        }
+
+        logSuccess(`Hotkey file generated at ${settings.outputPath}`);
         vscode.window.showInformationMessage(
             `Hotkey file generated: ${settings.outputPath}`
         );

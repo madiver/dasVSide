@@ -8,6 +8,8 @@ import {
 } from "./formatRules";
 import { ValidationError } from "./errors";
 
+const INVALID_UTF8_PATTERN = /\uFFFD/;
+
 export interface ValidationOptions {
     templateText?: string;
 }
@@ -140,5 +142,26 @@ export function validateRenderedOutput(
                 );
             }
         }
+    }
+}
+
+export function validateScriptContent(
+    content: string,
+    sourcePath: string
+): void {
+    if (!content || content.trim().length === 0) {
+        throw new ValidationError(
+            "Script content is empty.",
+            sourcePath,
+            { sourcePath }
+        );
+    }
+
+    if (INVALID_UTF8_PATTERN.test(content)) {
+        throw new ValidationError(
+            "Script content contains invalid UTF-8.",
+            sourcePath,
+            { sourcePath }
+        );
     }
 }

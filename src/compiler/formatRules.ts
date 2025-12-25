@@ -1,6 +1,8 @@
 export const CRLF = "\r\n";
+export const NEWLINE_TOKEN = "~0D~0A";
+export const ENCODED_LINE_WIDTH = 51;
 export const SCRIPT_BODY_PREFIX_PATTERN = /^~ \d+:/;
-export const INLINE_BODY_TERMINATOR = "~0D~0A";
+export const INLINE_BODY_TERMINATOR = NEWLINE_TOKEN;
 
 export const HOTKEY_HEADER_PATTERN =
     /^(?<keyCombo>[^\s:\r\n]*):(?<hotkeyName>[^:\r\n]+):/;

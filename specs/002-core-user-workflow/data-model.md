@@ -9,7 +9,7 @@
 
 ### Keymap Configuration
 - **Description**: keymap.yaml mapping of hotkey entries to script paths.
-- **Key fields**: entries (id, keyCombo, name, flags, scriptPath)
+- **Key fields**: entries (id, keyCombo, name, scriptPath)
 - **Validation rules**: file exists; scriptPath resolves to .das file
 
 ### Hotkey Template
