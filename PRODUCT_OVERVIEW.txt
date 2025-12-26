@@ -36,6 +36,16 @@ The tool must be easily packaged and distributed to non-developer users with min
 
 â¸»
 
+WORKFLOW SUMMARY
+
+1. Import: Use "DAS: Import Hotkey File" to split Hotkey.htk into hotkeys/ and keymap.yaml.
+2. Edit: Update .das scripts and keymap.yaml in the workspace.
+3. Lint: Use "DAS: Lint Scripts" for advisory checks.
+4. Analyze: Use "DAS: Analyze Dependencies" for call graph insights.
+5. Build: Use "DAS: Build Hotkey File" to generate Hotkey.htk.
+
+â¸»
+
 NON-GOALS
 
 The tool will not place trades.

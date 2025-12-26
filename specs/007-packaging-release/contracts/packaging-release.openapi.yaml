@@ -1,0 +1,73 @@
+﻿openapi: 3.0.3
+info:
+  title: Packaging and Release Validation Contracts
+  version: 1.0.0
+  description: Internal contracts describing packaging and release validation steps for the extension.
+paths:
+  /packaging/validate:
+    post:
+      summary: Validate VSIX packaging prerequisites and outputs
+      responses:
+        "200":
+          description: Packaging validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackagingValidationResult"
+  /docs/validate:
+    post:
+      summary: Validate required documentation coverage
+      responses:
+        "200":
+          description: Documentation validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentationValidationResult"
+  /release/prepare:
+    post:
+      summary: Prepare release metadata and changelog entry
+      responses:
+        "200":
+          description: Release preparation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleasePrepResult"
+components:
+  schemas:
+    PackagingValidationResult:
+      type: object
+      properties:
+        version:
+          type: string
+        vsixPath:
+          type: string
+        offlineReady:
+          type: boolean
+        validatedPlatforms:
+          type: array
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+    DocumentationValidationResult:
+      type: object
+      properties:
+        missingSections:
+          type: array
+          items:
+            type: string
+        summary:
+          type: string
+    ReleasePrepResult:
+      type: object
+      properties:
+        version:
+          type: string
+        changelogEntry:
+          type: string
+        breakingChanges:
+          type: boolean

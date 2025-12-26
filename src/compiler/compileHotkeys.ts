@@ -6,10 +6,16 @@ import { buildHotkeyModels } from "./model";
 import { aggregateHotkeys } from "./aggregate";
 import { renderHotkeys } from "./renderer";
 import { writeHotkeyFile } from "./writer";
+import {
+    PlaceholderValues,
+    substitutePlaceholders,
+} from "./placeholders";
+import { PlaceholderWarningTracker } from "./warnings";
 
 export interface CompileOptions {
     workspaceRoot: string;
     outputPath: string;
+    placeholderValues?: PlaceholderValues;
 }
 
 export async function compileHotkeys(
@@ -20,15 +26,22 @@ export async function compileHotkeys(
         workspaceRoot: options.workspaceRoot,
         scriptPaths: discovery.scriptPaths,
     });
-    const warnings = collectWarnings(
-        discovery.warnings,
-        keymapEntries,
-        discovery.scriptPaths
-    );
     const scriptContents = await loadScriptFiles(
         keymapEntries.map((entry) => entry.scriptPath)
     );
-    const hotkeys = buildHotkeyModels(keymapEntries, scriptContents);
+    const placeholderTracker = new PlaceholderWarningTracker();
+    const substitutedScripts = applyPlaceholderSubstitution(
+        scriptContents,
+        options.placeholderValues ?? {},
+        placeholderTracker
+    );
+    const warnings = collectWarnings(
+        discovery.warnings,
+        keymapEntries,
+        discovery.scriptPaths,
+        placeholderTracker.buildWarnings()
+    );
+    const hotkeys = buildHotkeyModels(keymapEntries, substitutedScripts);
     const ordered = aggregateHotkeys(hotkeys);
     const rendered = renderHotkeys(ordered);
     await writeHotkeyFile(options.outputPath, rendered);
@@ -38,15 +51,20 @@ export async function compileHotkeys(
         warnings,
         errors: [],
         outputPath: options.outputPath,
+        placeholderWarnings: placeholderTracker.buildPlaceholderWarnings(),
     };
 }
 
 function collectWarnings(
     baseWarnings: CompileWarning[],
     entries: { scriptPath: string }[],
-    scriptPaths: string[]
+    scriptPaths: string[],
+    extraWarnings: CompileWarning[] = []
 ): CompileWarning[] {
-    const warnings: CompileWarning[] = normalizeWarnings(baseWarnings);
+    const warnings: CompileWarning[] = normalizeWarnings([
+        ...baseWarnings,
+        ...extraWarnings,
+    ]);
     const referenced = new Set(
         entries.map((entry) => entry.scriptPath)
     );
@@ -72,4 +90,25 @@ function normalizeWarnings(warnings: CompileWarning[]): CompileWarning[] {
         id: warning.id,
         key: warning.key,
     }));
+}
+
+function applyPlaceholderSubstitution(
+    scripts: Map<string, string>,
+    values: PlaceholderValues,
+    tracker: PlaceholderWarningTracker
+): Map<string, string> {
+    // Use a fresh map to avoid mutating the loaded script contents.
+    const substituted = new Map<string, string>();
+    for (const [sourcePath, scriptText] of scripts.entries()) {
+        const result = substitutePlaceholders({
+            scriptText,
+            values,
+            sourcePath,
+        });
+        substituted.set(sourcePath, result.text);
+        for (const missing of result.missing) {
+            tracker.addMissing(missing, sourcePath);
+        }
+    }
+    return substituted;
 }

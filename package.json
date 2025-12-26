@@ -110,6 +110,18 @@
           },
           "scope": "resource"
         },
+        "dasHotkeyTools.liveAccount": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "User-level Live Account identifier used to replace `%%LIVE%%` tokens during builds.",
+          "scope": "application"
+        },
+        "dasHotkeyTools.simulatedAccount": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "User-level Simulated Account identifier used to replace `%%SIMULATED%%` tokens during builds.",
+          "scope": "application"
+        },
         "dasHotkeyTools.linting.enabled": {
           "type": "boolean",
           "default": true,

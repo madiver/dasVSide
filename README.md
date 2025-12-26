@@ -5,6 +5,13 @@ compiles `keymap.yaml` and `.das` scripts into a single deterministic
 `Hotkey.htk` file. `Hotkey.htk` is treated as a compiled artifact and is only
 written by the build command (with overwrite confirmation).
 
+## Tooling Boundaries & Non-Goals
+
+- This extension does not place trades or connect to DAS Trader APIs.
+- This extension does not stream market data or validate runtime DAS state.
+- Outputs are build artifacts only; users remain responsible for trading logic.
+- All workflows operate locally and must work offline after installation.
+
 ## Development (Extension Host)
 
 1. Open this folder in VS Code.
@@ -36,6 +43,8 @@ written by the build command (with overwrite confirmation).
 
 - `keymap.yaml` is the source of truth for hotkey metadata; script contents are
   never rewritten.
+- During builds, exact `%%LIVE%%` and `%%SIMULATED%%` tokens in script bodies are
+  replaced with user-level account settings when provided.
 - Duplicate ids or key combinations fail compilation with actionable errors.
 - Missing, empty, or malformed scripts fail compilation and no output is written.
 - Unreferenced `.das` files emit warnings but do not block output.
@@ -68,6 +77,17 @@ written by the build command (with overwrite confirmation).
 2. Run `DAS: Lint Scripts` to scan the workspace on demand.
 3. Adjust lint settings in workspace `settings.json` and confirm diagnostics update.
 
+## Command Catalog
+
+| Command ID | Title | Purpose |
+| --- | --- | --- |
+| `dasHotkeyTools.buildHotkeyFile` | DAS: Build Hotkey File | Compile `.das` + `keymap.yaml` into `Hotkey.htk`. |
+| `dasHotkeyTools.importHotkeyFile` | DAS: Import Hotkey File | Import `Hotkey.htk` into `hotkeys/` + `keymap.yaml`. |
+| `dasHotkeyTools.lintScripts` | DAS: Lint Scripts | Run advisory linting on `.das` scripts. |
+| `dasHotkeyTools.analyzeDependencies` | DAS: Analyze Dependencies | Build a dependency graph and summarize cycles/unused scripts. |
+| `dasHotkeyTools.showCallers` | DAS: Show Callers | Show scripts that call the current `.das` file. |
+| `dasHotkeyTools.showCallees` | DAS: Show Callees | Show scripts called by the current `.das` file. |
+
 ## Settings
 
 Add the settings to your workspace `settings.json`:
@@ -88,18 +108,42 @@ Add the settings to your workspace `settings.json`:
 - `dasHotkeyTools.outputPath` must be a writable file path.
 - `dasHotkeyTools.templateVariables` remains for legacy template workflows and
   is ignored by the Phase 5 compiler.
- - Relative output paths resolve against the workspace root (default: `output.htk`).
+- Relative output paths resolve against the workspace root (default: `output.htk`).
 
-## Package
+Add account placeholders in **user** settings (not workspace settings):
 
-```powershell
-npm run package
+```json
+{
+  "dasHotkeyTools.liveAccount": "LIVE-ACCOUNT-ID",
+  "dasHotkeyTools.simulatedAccount": "SIM-ACCOUNT-ID"
+}
 ```
 
-Confirm a `.vsix` file is created in the repository root.
+- If a placeholder setting is missing, the build warns and leaves the token
+  unchanged in the compiled output.
 
-## Install the .vsix
+## Packaging & Offline Validation
 
-1. Create a fresh VS Code user profile.
+### Build the VSIX
+
+1. Run `npm install` to ensure dependencies are present.
+2. Run `npm run package` to create a versioned `.vsix` in the repository root.
+3. Confirm the `.vsix` file exists at the repo root.
+
+### Install the .vsix (Windows and macOS)
+
+1. Create a fresh VS Code user profile on the target OS.
 2. Install the generated `.vsix` into that profile.
-3. Run `DAS: Build Hotkey File` and confirm the output file is created.
+3. Restart VS Code to ensure activation.
+
+### Offline Validation (Build + Import)
+
+1. Disconnect from the network after the extension is installed.
+2. Run `DAS: Build Hotkey File` and confirm the output file is created.
+3. Run `DAS: Import Hotkey File` and confirm `keymap.yaml` and `hotkeys/` are created.
+4. Reconnect to the network after validation is complete.
+
+### Uninstall Validation
+
+1. Uninstall the extension from the profile.
+2. Confirm no residual configuration is required for a clean reinstall.
