@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import { DependencyAnalysisCache } from "./cache";
 import { detectCycles } from "./cycles";
@@ -30,8 +31,11 @@ async function loadScripts(
         maxFiles
     );
     const results: ScriptParseResult[] = [];
+    const filtered = scripts.filter(
+        (uri) => !path.basename(uri.fsPath).startsWith("._")
+    );
 
-    for (const uri of scripts) {
+    for (const uri of filtered) {
         const bytes = await vscode.workspace.fs.readFile(uri);
         const content = Buffer.from(bytes).toString("utf8");
         results.push(parseScript(uri.fsPath, content, workspaceRoot));

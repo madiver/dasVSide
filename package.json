@@ -3,6 +3,7 @@
   "publisher": "das-hotkey-tools",
   "displayName": "DAS Hotkey Tools",
   "description": "Phase 0 scaffold for DAS Hotkey Tools",
+  "icon": "images/icon.png",
   "version": "0.0.1",
   "repository": {
     "type": "git",

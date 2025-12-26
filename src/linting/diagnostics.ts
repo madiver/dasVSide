@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import { lintWorkspace } from "./engine";
 import { loadLintConfig } from "./config";
@@ -35,7 +36,10 @@ async function loadWorkspaceScripts(
     );
 
     const results: { filePath: string; content: string }[] = [];
-    for (const uri of scripts) {
+    const filtered = scripts.filter(
+        (uri) => !path.basename(uri.fsPath).startsWith("._")
+    );
+    for (const uri of filtered) {
         const bytes = await vscode.workspace.fs.readFile(uri);
         const content = Buffer.from(bytes).toString("utf8");
         results.push({ filePath: uri.fsPath, content });

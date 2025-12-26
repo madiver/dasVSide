@@ -93,6 +93,10 @@ async function discoverScriptPaths(
                 continue;
             }
 
+            if (entry.name.startsWith("._")) {
+                continue;
+            }
+
             if (entry.name.toLowerCase().endsWith(".das")) {
                 scripts.push(fullPath);
             }
