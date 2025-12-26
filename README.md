@@ -1,4 +1,4 @@
-# DAS Hotkey Tools
+﻿# DAS Hotkey Tools
 
 Create, import, and manage DAS Trader hotkeys with a clean, version-friendly workflow in VS Code. This extension turns Hotkey.htk into readable `.das` scripts plus a canonical `keymap.yaml`, and compiles them back into deterministic Hotkey.htk output.
 
@@ -8,7 +8,7 @@ DAS Hotkey Tools helps active DAS Trader users manage complex hotkeys without ed
 
 ## Risk Disclaimer
 
-This extension is provided “as is” and is used at your own risk. It does not guarantee trading outcomes, and the author is not responsible for any losses or damages resulting from its use. Users are solely responsible for reviewing and validating all hotkeys and scripts before use in DAS Trader.
+This extension is provided "as is" and is used at your own risk. It does not guarantee trading outcomes, and the author is not responsible for any losses or damages resulting from its use. Users are solely responsible for reviewing and validating all hotkeys and scripts before use in DAS Trader.
 
 ## Features
 
@@ -51,6 +51,16 @@ You can keep account numbers out of shared scripts by using exact tokens:
 
 During builds, these tokens are replaced in script bodies when user-level settings are provided. If a setting is missing, the build warns and leaves the token unchanged.
 
+## Group Tags (Optional)
+
+To preserve grouping during import, you can add a group tag in the top comment block of each `.das` file:
+
+```
+// Group: Buy orders: Ask+ SL
+```
+
+The `// Group:` tag is case-insensitive and used by the importer to group entries in the generated `keymap.yaml`.
+
 ## Installing Hotkey.htk in DAS Trader
 
 When you manually replace the Hotkey.htk file in DAS Trader, close DAS Trader Pro first, replace the file, then restart the application so the new hotkeys are loaded.
@@ -68,7 +78,21 @@ When you manually replace the Hotkey.htk file in DAS Trader, close DAS Trader Pr
 
 ## Settings
 
-Workspace settings (settings.json):
+Use the Settings UI:
+
+1. Open Settings (Ctrl+, / Cmd+,).
+2. Search for **DAS Hotkey Tools**.
+3. Set workspace settings:
+   - **Output Path**
+   - **Linting: Enabled**
+   - **Linting: Lint On Build** (optional)
+4. Set user settings (placeholders):
+   - **Live Account**
+   - **Simulated Account**
+
+If you prefer editing `settings.json` directly, use:
+
+Workspace settings:
 
 ```json
 {
@@ -121,4 +145,3 @@ This extension does not place trades, connect to DAS Trader APIs, or validate tr
 ## Support
 
 Report issues or request enhancements at: https://github.com/madiver/dasVSide/issues
-
