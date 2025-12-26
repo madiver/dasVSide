@@ -143,24 +143,6 @@ function assertEntryRecord(value: unknown, index: number): KeymapEntryRecord {
     );
 }
 
-function detectDuplicates(
-    values: string[],
-    options: { ignoreEmpty?: boolean } = {}
-): string[] {
-    const counts = new Map<string, number>();
-    for (const value of values) {
-        const normalized = value.trim();
-        if (options.ignoreEmpty && !normalized) {
-            continue;
-        }
-        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
-    }
-
-    return Array.from(counts.entries())
-        .filter(([, count]) => count > 1)
-        .map(([value]) => value);
-}
-
 export async function parseKeymapFile(
     keymapPath: string,
     options: KeymapParseOptions
@@ -241,24 +223,6 @@ export async function parseKeymapFile(
             scriptPath: resolvedPath,
         };
     });
-
-    const duplicateIds = detectDuplicates(entries.map((entry) => entry.id));
-    if (duplicateIds.length > 0) {
-        throw new KeymapError(
-            "Duplicate hotkey ids detected in keymap.yaml.",
-            `Duplicate ids: ${duplicateIds.join(", ")}.`
-        );
-    }
-
-    const duplicateKeys = detectDuplicates(entries.map((entry) => entry.key), {
-        ignoreEmpty: true,
-    });  
-    if (duplicateKeys.length > 0) {
-        throw new KeymapError(
-            "Duplicate key combinations detected in keymap.yaml.",
-            `Duplicate keys: ${duplicateKeys.join(", ")}.`
-        );
-    }
 
     return entries;
 }
