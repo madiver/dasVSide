@@ -139,6 +139,8 @@ function buildWorkspaceContext(
         keymapRefs,
         keymapDuplicates,
         keymapPresent,
+        keymapText: inputs.keymapText,
+        keymapPath: inputs.keymapPath,
         config,
     };
 }

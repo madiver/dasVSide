@@ -4,8 +4,12 @@ import * as vscode from "vscode";
 import { runBuildHotkeyFile } from "./commands/buildHotkeyFile";
 import { runImportHotkeyFile } from "./commands/importHotkeyFile";
 import { runLintScripts } from "./commands/lintScripts";
+import { runAnalyzeDependencies } from "./commands/analyzeDependencies";
+import { runShowCallees } from "./commands/showCallees";
+import { runShowCallers } from "./commands/showCallers";
 import { ExecHotkeySymbolProvider } from "./language/execHotkeySymbolProvider";
 import { registerLinting } from "./linting/diagnostics";
+import { registerDependencyTreeView } from "./views/dependencyTree";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -34,11 +38,32 @@ export function activate(context: vscode.ExtensionContext) {
         runImportHotkeyFile
     );
 
+    const analyzeDisposable = vscode.commands.registerCommand(
+        "dasHotkeyTools.analyzeDependencies",
+        runAnalyzeDependencies
+    );
+
+    const showCallersDisposable = vscode.commands.registerCommand(
+        "dasHotkeyTools.showCallers",
+        runShowCallers
+    );
+
+    const showCalleesDisposable = vscode.commands.registerCommand(
+        "dasHotkeyTools.showCallees",
+        runShowCallees
+    );
+
+    const dependencyTreeDisposable = registerDependencyTreeView();
+
     context.subscriptions.push(
         dasSymbolProvider,
         buildDisposable,
         lintDisposable,
-        importDisposable
+        importDisposable,
+        analyzeDisposable,
+        showCallersDisposable,
+        showCalleesDisposable,
+        dependencyTreeDisposable
     );
 }
 

@@ -15,6 +15,14 @@
     "Other"
   ],
   "main": "./out/extension.js",
+  "activationEvents": [
+    "onCommand:dasHotkeyTools.buildHotkeyFile",
+    "onCommand:dasHotkeyTools.lintScripts",
+    "onCommand:dasHotkeyTools.importHotkeyFile",
+    "onCommand:dasHotkeyTools.analyzeDependencies",
+    "onCommand:dasHotkeyTools.showCallers",
+    "onCommand:dasHotkeyTools.showCallees"
+  ],
   "contributes": {
     "commands": [
       {
@@ -28,8 +36,42 @@
       {
         "command": "dasHotkeyTools.importHotkeyFile",
         "title": "DAS: Import Hotkey File"
+      },
+      {
+        "command": "dasHotkeyTools.analyzeDependencies",
+        "title": "DAS: Analyze Dependencies"
+      },
+      {
+        "command": "dasHotkeyTools.showCallers",
+        "title": "DAS: Show Callers"
+      },
+      {
+        "command": "dasHotkeyTools.showCallees",
+        "title": "DAS: Show Callees"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "dasHotkeyTools.dependencyTree",
+          "name": "DAS Dependencies"
+        }
+      ]
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "dasHotkeyTools.showCallers",
+          "when": "resourceLangId == das",
+          "group": "navigation"
+        },
+        {
+          "command": "dasHotkeyTools.showCallees",
+          "when": "resourceLangId == das",
+          "group": "navigation"
+        }
+      ]
+    },
     "languages": [
       {
         "id": "das",

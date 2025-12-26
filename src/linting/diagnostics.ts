@@ -184,6 +184,10 @@ export function registerLinting(context: vscode.ExtensionContext): LintControlle
         vscode.workspace.onDidChangeTextDocument((event) => {
             if (event.document.languageId === "das") {
                 controller.scheduleWorkspaceLint();
+                return;
+            }
+            if (event.document.fileName.toLowerCase().endsWith("keymap.yaml")) {
+                controller.scheduleWorkspaceLint();
             }
         }),
         vscode.workspace.onDidChangeConfiguration((event) => {

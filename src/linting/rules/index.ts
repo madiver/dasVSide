@@ -1,5 +1,6 @@
 import { LintRule } from "../types";
 import { controlFlowRule } from "./controlFlow";
+import { dependencyGraphRule } from "./dependencyGraph";
 import { dangerousCommandsRule } from "./dangerousCommands";
 import { execHotkeyGraphRule } from "./execHotkeyGraph";
 import { objectUsageRule } from "./objectUsage";
@@ -14,5 +15,6 @@ export function getLintRules(): LintRule[] {
         objectUsageRule,
         structureRule,
         execHotkeyGraphRule,
+        dependencyGraphRule,
     ];
 }

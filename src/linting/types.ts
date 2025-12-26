@@ -58,6 +58,8 @@ export interface LintWorkspaceContext {
     keymapRefs: Set<string>;
     keymapDuplicates: Set<string>;
     keymapPresent: boolean;
+    keymapText?: string;
+    keymapPath?: string;
     config: LintConfig;
 }
 
