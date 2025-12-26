@@ -1,0 +1,145 @@
+﻿openapi: 3.0.3
+info:
+  title: Hotkey Importer (Internal)
+  version: 1.0.0
+  description: |
+    Conceptual contract for the internal importer action invoked by the VS Code
+    command. This is documentation-only and does not imply a network service.
+paths:
+  /import:
+    post:
+      summary: Import Hotkey.htk into .das scripts and keymap.yaml
+      operationId: importHotkeys
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sourcePath
+                - destinationRoot
+              properties:
+                sourcePath:
+                  type: string
+                  description: Absolute path to the Hotkey.htk file.
+                destinationRoot:
+                  type: string
+                  description: Absolute path to the destination workspace root.
+                overwriteExisting:
+                  type: boolean
+                  description: Whether to overwrite existing files.
+      responses:
+        "200":
+          description: Import completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - destinationRoot
+                  - entries
+                  - warnings
+                  - errors
+                properties:
+                  destinationRoot:
+                    type: string
+                  entries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/KeymapEntry"
+                  warnings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ImportIssue"
+                  errors:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ImportIssue"
+        "400":
+          description: Import failed due to validation errors.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - errors
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ImportIssue"
+  /verify:
+    post:
+      summary: Verify round-trip equivalence for Hotkey.htk
+      operationId: verifyRoundTrip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sourcePath
+                - destinationRoot
+              properties:
+                sourcePath:
+                  type: string
+                destinationRoot:
+                  type: string
+      responses:
+        "200":
+          description: Verification completed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - isEquivalent
+                  - originalPath
+                  - rebuiltPath
+                properties:
+                  isEquivalent:
+                    type: boolean
+                  originalPath:
+                    type: string
+                  rebuiltPath:
+                    type: string
+                  mismatchSummary:
+                    type: string
+components:
+  schemas:
+    KeymapEntry:
+      type: object
+      required:
+        - id
+        - key
+        - label
+        - scriptPath
+      properties:
+        id:
+          type: string
+        key:
+          type: string
+        label:
+          type: string
+        scriptPath:
+          type: string
+    ImportIssue:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        recordIndex:
+          type: integer
+        key:
+          type: string
+        label:
+          type: string
+        sourcePath:
+          type: string

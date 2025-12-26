@@ -2,8 +2,8 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 import { runBuildHotkeyFile } from "./commands/buildHotkeyFile";
+import { runImportHotkeyFile } from "./commands/importHotkeyFile";
 import { runLintScripts } from "./commands/lintScripts";
-import { runPlaceholderCommand } from "./commands/placeholderCommand";
 import { ExecHotkeySymbolProvider } from "./language/execHotkeySymbolProvider";
 import { registerLinting } from "./linting/diagnostics";
 
@@ -19,11 +19,6 @@ export function activate(context: vscode.ExtensionContext) {
         new ExecHotkeySymbolProvider()
     );
 
-    const placeholderDisposable = vscode.commands.registerCommand(
-        "dasHotkeyTools.placeholderCommand",
-        runPlaceholderCommand
-    );
-
     const buildDisposable = vscode.commands.registerCommand(
         "dasHotkeyTools.buildHotkeyFile",
         runBuildHotkeyFile
@@ -34,11 +29,16 @@ export function activate(context: vscode.ExtensionContext) {
         runLintScripts
     );
 
+    const importDisposable = vscode.commands.registerCommand(
+        "dasHotkeyTools.importHotkeyFile",
+        runImportHotkeyFile
+    );
+
     context.subscriptions.push(
         dasSymbolProvider,
-        placeholderDisposable,
         buildDisposable,
-        lintDisposable
+        lintDisposable,
+        importDisposable
     );
 }
 

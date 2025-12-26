@@ -88,8 +88,8 @@ export async function runBuildHotkeyFile(): Promise<void> {
 
     try {
         logOutput("Loading settings.");
-        const settings = loadSettings();
         const workspaceRoot = getWorkspaceRoot();
+        const settings = loadSettings(workspaceRoot);
 
         const lintConfig = loadLintConfig();
         if (lintConfig.enabled && lintConfig.lintOnBuild) {

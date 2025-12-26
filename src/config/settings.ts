@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import path from "path";
 import { ConfigurationError } from "../compiler/errors";
 
 export interface ExtensionSettings {
@@ -23,7 +24,20 @@ function normalizeTemplateVariables(
     return templateVariables;
 }
 
-export function loadSettings(): ExtensionSettings {
+function resolveOutputPath(
+    value: string,
+    workspaceRoot?: string
+): string {
+    if (path.isAbsolute(value)) {
+        return value;
+    }
+    if (workspaceRoot) {
+        return path.join(workspaceRoot, value);
+    }
+    return value;
+}
+
+export function loadSettings(workspaceRoot?: string): ExtensionSettings {
     const config = vscode.workspace.getConfiguration("dasHotkeyTools");
     const outputPath = config.get<string>("outputPath", "").trim();
 
@@ -44,5 +58,7 @@ export function loadSettings(): ExtensionSettings {
 
     const templateVariables = normalizeTemplateVariables(rawVariables);
 
-    return { outputPath, templateVariables };
+    const resolvedOutputPath = resolveOutputPath(outputPath, workspaceRoot);
+
+    return { outputPath: resolvedOutputPath, templateVariables };
 }

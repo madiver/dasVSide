@@ -38,12 +38,19 @@ function readStringField(
     keys: string[],
     label: string,
     index: number,
-    context?: { id?: string; key?: string }
+    context?: { id?: string; key?: string },
+    options: { allowEmpty?: boolean } = {}
 ): string {
     for (const key of keys) {
         const value = entry[key];
-        if (typeof value === "string" && value.trim()) {
-            return value.trim();
+        if (value === null && options.allowEmpty) {
+            return "";
+        }
+        if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (trimmed || options.allowEmpty) {
+                return trimmed;
+            }
         }
     }
 
@@ -136,10 +143,16 @@ function assertEntryRecord(value: unknown, index: number): KeymapEntryRecord {
     );
 }
 
-function detectDuplicates(values: string[]): string[] {
+function detectDuplicates(
+    values: string[],
+    options: { ignoreEmpty?: boolean } = {}
+): string[] {
     const counts = new Map<string, number>();
     for (const value of values) {
         const normalized = value.trim();
+        if (options.ignoreEmpty && !normalized) {
+            continue;
+        }
         counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
     }
 
@@ -196,9 +209,14 @@ export async function parseKeymapFile(
     const entries: KeymapEntry[] = rawEntries.map((raw, index) => {
         const record = assertEntryRecord(raw, index);
         const id = readStringField(record, ["id"], "id", index);
-        const key = readStringField(record, ["key", "keyCombo"], "key", index, {
-            id,
-        });
+        const key = readStringField(
+            record,
+            ["key", "keyCombo"],
+            "key",
+            index,
+            { id },
+            { allowEmpty: true }
+        );
         const context = { id, key };
         const label = readStringField(
             record,
@@ -232,7 +250,9 @@ export async function parseKeymapFile(
         );
     }
 
-    const duplicateKeys = detectDuplicates(entries.map((entry) => entry.key));
+    const duplicateKeys = detectDuplicates(entries.map((entry) => entry.key), {
+        ignoreEmpty: true,
+    });  
     if (duplicateKeys.length > 0) {
         throw new KeymapError(
             "Duplicate key combinations detected in keymap.yaml.",
