@@ -1,0 +1,151 @@
+﻿openapi: 3.0.3
+info:
+  title: Dependency Graph Analysis (Internal)
+  version: 1.0.0
+paths:
+  /analysis:
+    post:
+      summary: Run dependency analysis
+      responses:
+        '200':
+          description: Graph report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphReport'
+  /graph/callers/{path}:
+    get:
+      summary: List callers for a script
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Caller list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallList'
+  /graph/callees/{path}:
+    get:
+      summary: List callees for a script
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Callee list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallList'
+  /graph/cycles:
+    get:
+      summary: List detected cycles
+      responses:
+        '200':
+          description: Cycle list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleList'
+  /graph/dead-scripts:
+    get:
+      summary: List unreferenced scripts
+      responses:
+        '200':
+          description: Dead script list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeadScriptList'
+components:
+  schemas:
+    GraphReport:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScriptNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/DependencyEdge'
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Finding'
+        metadata:
+          type: object
+          additionalProperties: true
+      required: [nodes, edges, findings]
+    ScriptNode:
+      type: object
+      properties:
+        path:
+          type: string
+        id:
+          type: string
+          nullable: true
+        label:
+          type: string
+          nullable: true
+      required: [path]
+    DependencyEdge:
+      type: object
+      properties:
+        fromPath:
+          type: string
+        toPath:
+          type: string
+        referenceType:
+          type: string
+          enum: [ExecHotkey, DasPathLiteral]
+      required: [fromPath, toPath, referenceType]
+    Finding:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [Cycle, DeadScript, MissingReference]
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+      required: [type, message]
+    CallList:
+      type: object
+      properties:
+        path:
+          type: string
+        callers:
+          type: array
+          items:
+            type: string
+      required: [path, callers]
+    CycleList:
+      type: object
+      properties:
+        cycles:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+      required: [cycles]
+    DeadScriptList:
+      type: object
+      properties:
+        scripts:
+          type: array
+          items:
+            type: string
+      required: [scripts]
