@@ -98,9 +98,9 @@
 **Purpose**: Final validation and regression checks
 
 - [ ] T023 [P] Run smoke workflow checklist (build/import/lint/navigation) and record in specs/007-packaging-release/release-checklist.md
-- [ ] T024 [P] Validate determinism and offline compliance notes in specs/007-packaging-release/release-checklist.md
-- [ ] T025 Run final docs accuracy review and sign-off in specs/007-packaging-release/release-checklist.md
-- [ ] T026 Measure packaging+validation duration and record result in specs/007-packaging-release/release-checklist.md
+- [X] T024 [P] Validate determinism and offline compliance notes in specs/007-packaging-release/release-checklist.md
+- [X] T025 Run final docs accuracy review and sign-off in specs/007-packaging-release/release-checklist.md
+- [X] T026 Measure packaging+validation duration and record result in specs/007-packaging-release/release-checklist.md
 
 ---
 
