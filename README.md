@@ -1,6 +1,4 @@
-﻿# DAS Hotkey Tools
-
-Create, import, and manage DAS Trader hotkeys with a clean, version-friendly workflow in VS Code. This extension turns Hotkey.htk into readable `.das` scripts plus a canonical `keymap.yaml`, and compiles them back into deterministic Hotkey.htk output.
+﻿Create, import, and manage DAS Trader hotkeys with a clean, version-friendly workflow in VS Code. This extension turns Hotkey.htk into readable `.das` scripts plus a canonical `keymap.yaml`, and compiles them back into deterministic Hotkey.htk output.
 
 ## Overview
 
