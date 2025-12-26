@@ -8,10 +8,10 @@
 
 ## Documentation Inventory
 
-- [ ] README.md (repo root)
-- [ ] CHANGELOG.md (repo root)
-- [ ] PRODUCT_OVERVIEW.txt (repo root)
-- [ ] vsc-extension-quickstart.md (repo root)
+- [X] README.md (repo root)
+- [X] CHANGELOG.md (repo root)
+- [X] PRODUCT_OVERVIEW.txt (repo root)
+- [X] vsc-extension-quickstart.md (repo root)
 
 ## Packaging Validation
 
@@ -68,11 +68,16 @@
 
 ## Packaging Duration
 
-- [ ] Packaging + validation duration recorded (minutes/seconds):
+- [X] Packaging + validation duration recorded (minutes/seconds): 26.2 seconds (`npm run package` on Windows)
 
 ## Validation Notes
 
 - Notes:
+  - Smoke workflow (build/import/lint/navigation) requires manual VS Code run; pending.
+  - Determinism note verified in README ("Compiler Behavior & Limitations").
+  - Offline workflow steps verified in README ("Packaging & Offline Validation").
+  - Docs accuracy review completed for README.md, CHANGELOG.md, PRODUCT_OVERVIEW.txt, and vsc-extension-quickstart.md.
+  - VSIX packaging warning: extension has many files; consider bundling and/or tightening .vscodeignore.
   - LICENSE file exists at repo root.
   - `package.json` is missing a `license` field.
   - No Marketplace icon file or `icon` entry is present.
