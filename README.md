@@ -49,6 +49,16 @@ You can keep account numbers out of shared scripts by using exact tokens:
 
 During builds, these tokens are replaced in script bodies when user-level settings are provided. If a setting is missing, the build warns and leaves the token unchanged.
 
+## Ignore Scripts (Optional)
+
+To exclude a script from builds, add this tag anywhere in the script:
+
+```
+// Ignore: True
+```
+
+The `// Ignore: True` tag is case-insensitive. Ignored scripts are skipped during builds even if they appear in `keymap.yaml`.
+
 ## Group Tags (Optional)
 
 To preserve grouping during import, you can add a group tag in the top comment block of each `.das` file:

@@ -6,11 +6,13 @@ import { buildHotkeyModels } from "./model";
 import { aggregateHotkeys } from "./aggregate";
 import { renderHotkeys } from "./renderer";
 import { writeHotkeyFile } from "./writer";
+import { KeymapError } from "./errors";
 import {
     PlaceholderValues,
     substitutePlaceholders,
 } from "./placeholders";
 import { PlaceholderWarningTracker } from "./warnings";
+import { detectIgnoredScripts } from "./ignore";
 
 export interface CompileOptions {
     workspaceRoot: string;
@@ -29,19 +31,39 @@ export async function compileHotkeys(
     const scriptContents = await loadScriptFiles(
         keymapEntries.map((entry) => entry.scriptPath)
     );
+    const ignoredScripts = await detectIgnoredScripts(
+        discovery.scriptPaths,
+        scriptContents
+    );
+    const filteredEntries = keymapEntries.filter(
+        (entry) => !ignoredScripts.has(entry.scriptPath)
+    );
+    if (filteredEntries.length === 0) {
+        throw new KeymapError(
+            "All keymap entries are ignored.",
+            "No buildable scripts remain after applying // Ignore: True tags."
+        );
+    }
+    assertNoDuplicates(filteredEntries);
+    const filteredContents = selectScriptContents(
+        scriptContents,
+        filteredEntries
+    );
     const placeholderTracker = new PlaceholderWarningTracker();
     const substitutedScripts = applyPlaceholderSubstitution(
-        scriptContents,
+        filteredContents,
         options.placeholderValues ?? {},
         placeholderTracker
     );
     const warnings = collectWarnings(
         discovery.warnings,
-        keymapEntries,
-        discovery.scriptPaths,
+        filteredEntries,
+        discovery.scriptPaths.filter(
+            (scriptPath) => !ignoredScripts.has(scriptPath)
+        ),
         placeholderTracker.buildWarnings()
     );
-    const hotkeys = buildHotkeyModels(keymapEntries, substitutedScripts);
+    const hotkeys = buildHotkeyModels(filteredEntries, substitutedScripts);
     const ordered = aggregateHotkeys(hotkeys);
     const rendered = renderHotkeys(ordered);
     await writeHotkeyFile(options.outputPath, rendered);
@@ -82,7 +104,61 @@ function collectWarnings(
     return warnings;
 }
 
-function normalizeWarnings(warnings: CompileWarning[]): CompileWarning[] {
+function assertNoDuplicates(
+    entries: { id: string; key: string }[]
+): void {
+    const duplicateIds = findDuplicates(entries.map((entry) => entry.id));
+    if (duplicateIds.length > 0) {
+        throw new KeymapError(
+            "Duplicate hotkey ids detected in keymap.yaml.",
+            `Duplicate ids: ${duplicateIds.join(", ")}.`
+        );
+    }
+
+    const duplicateKeys = findDuplicates(entries.map((entry) => entry.key), {
+        ignoreEmpty: true,
+    });
+    if (duplicateKeys.length > 0) {
+        throw new KeymapError(
+            "Duplicate key combinations detected in keymap.yaml.",
+            `Duplicate keys: ${duplicateKeys.join(", ")}.`
+        );
+    }
+}
+
+function findDuplicates(
+    values: string[],
+    options: { ignoreEmpty?: boolean } = {}
+): string[] {
+    const counts = new Map<string, number>();
+    for (const value of values) {
+        const normalized = value.trim();
+        if (options.ignoreEmpty && !normalized) {
+            continue;
+        }
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+        .filter(([, count]) => count > 1)
+        .map(([value]) => value);
+}
+
+function selectScriptContents(
+    scripts: Map<string, string>,
+    entries: { scriptPath: string }[]
+): Map<string, string> {
+    const selected = new Map<string, string>();
+    for (const entry of entries) {
+        const scriptText = scripts.get(entry.scriptPath);
+        if (scriptText !== undefined) {
+            selected.set(entry.scriptPath, scriptText);
+        }
+    }
+    return selected;
+}
+
+function normalizeWarnings(warnings: CompileWarning[]): CompileWarning[] {      
     return warnings.map((warning) => ({
         code: warning.code,
         message: warning.message,
