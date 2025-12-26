@@ -28,10 +28,15 @@ export function buildGraph(
     const index = buildScriptIndex(scriptPaths, workspaceRoot);
 
     const entryById = new Map<string, KeymapEntry>();
+    const entriesByLabel = new Map<string, KeymapEntry[]>();
     const entryByScript = new Map<string, KeymapEntry>();
     for (const entry of keymapEntries) {
         entryById.set(normalizeKey(entry.id), entry);
-        const scriptKey = normalizeRelativePath(entry.scriptRelativePath);
+        const labelKey = normalizeKey(entry.label);
+        const labelEntries = entriesByLabel.get(labelKey) ?? [];
+        labelEntries.push(entry);
+        entriesByLabel.set(labelKey, labelEntries);
+        const scriptKey = normalizeRelativePath(entry.scriptRelativePath);      
         if (!entryByScript.has(scriptKey)) {
             entryByScript.set(scriptKey, entry);
         }
@@ -57,15 +62,30 @@ export function buildGraph(
             let targetPath: string | undefined;
 
             if (reference.type === "execHotkey") {
-                const entry = entryById.get(normalizeKey(reference.target));
+                const key = normalizeKey(reference.target);
+                const entry = entryById.get(key);
                 if (entry) {
                     targetPath = entry.scriptRelativePath;
                 } else {
-                    findings.push({
-                        type: "missingReference",
-                        message: `ExecHotkey target "${reference.target}" not found in keymap.yaml.`,
-                        sourcePath: script.relativePath,
-                    });
+                    const labelMatches = entriesByLabel.get(key) ?? [];
+                    if (labelMatches.length > 0) {
+                        if (labelMatches.length > 1) {
+                            findings.push({
+                                type: "missingReference",
+                                message:
+                                    `ExecHotkey target "${reference.target}" matches multiple labels in keymap.yaml; using the first match.`,
+                                sourcePath: script.relativePath,
+                            });
+                        }
+                        targetPath = labelMatches[0]?.scriptRelativePath;
+                    } else {
+                        findings.push({
+                            type: "missingReference",
+                            message:
+                                `ExecHotkey target "${reference.target}" not found in keymap.yaml (id or label).`,
+                            sourcePath: script.relativePath,
+                        });
+                    }
                 }
             } else {
                 const resolved = resolveScriptPath(

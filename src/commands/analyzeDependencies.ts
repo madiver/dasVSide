@@ -57,7 +57,10 @@ export async function runAnalyzeDependencies(): Promise<void> {
                 `Detected ${missingFindings.length} unresolved reference(s).`
             );
             missingFindings.forEach((finding) => {
-                logWarning(finding.message);
+                const details = finding.sourcePath
+                    ? `${finding.message} (source: ${finding.sourcePath})`
+                    : finding.message;
+                logWarning(details);
             });
         }
 

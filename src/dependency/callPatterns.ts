@@ -62,10 +62,10 @@ function stripLineComments(text: string): string {
 }
 
 export function findExecHotkeyRefs(text: string): ReferenceMatch[] {
-    const scan = buildScanContext(text);
+    const sanitized = stripLineComments(text);
     const matches: ReferenceMatch[] = [];
 
-    for (const match of scan.code.matchAll(EXEC_HOTKEY_PATTERN)) {
+    for (const match of sanitized.matchAll(EXEC_HOTKEY_PATTERN)) {
         if (typeof match.index !== "number") {
             continue;
         }

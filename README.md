@@ -1,96 +1,74 @@
-# DAS Hotkey Tools (Phase 5)
+# DAS Hotkey Tools
 
-Phase 5 delivers the core compiler workflow for DAS Hotkey Tools. The extension
-compiles `keymap.yaml` and `.das` scripts into a single deterministic
-`Hotkey.htk` file. `Hotkey.htk` is treated as a compiled artifact and is only
-written by the build command (with overwrite confirmation).
+Create, import, and manage DAS Trader hotkeys with a clean, version-friendly workflow in VS Code. This extension turns Hotkey.htk into readable `.das` scripts plus a canonical `keymap.yaml`, and compiles them back into deterministic Hotkey.htk output.
 
-## Tooling Boundaries & Non-Goals
+## Overview
 
-- This extension does not place trades or connect to DAS Trader APIs.
-- This extension does not stream market data or validate runtime DAS state.
-- Outputs are build artifacts only; users remain responsible for trading logic.
-- All workflows operate locally and must work offline after installation.
+DAS Hotkey Tools helps active DAS Trader users manage complex hotkeys without editing Hotkey.htk by hand. It exists to address limitations of the built-in DAS Trader editor when managing large, complex script libraries. You can import legacy Hotkey.htk files, edit scripts with language support and linting, analyze dependencies, and rebuild output safely and deterministically.
 
-## Development (Extension Host)
+## Risk Disclaimer
 
-1. Open this folder in VS Code.
-2. Press `F5` to launch the Extension Development Host.
-3. Open the Command Palette and run `DAS: Build Hotkey File`.
-4. Confirm the success toast and output path.
+This extension is provided “as is” and is used at your own risk. It does not guarantee trading outcomes, and the author is not responsible for any losses or damages resulting from its use. Users are solely responsible for reviewing and validating all hotkeys and scripts before use in DAS Trader.
 
-## Phase 5 Quickstart
+## Features
 
-1. Open a workspace that contains one or more `.das` files.
-2. Create a `keymap.yaml` file in the workspace with entries that include `id`,
-   `key`, `label`, and `scriptPath`.
-3. Set the output path in settings (example below).
-4. Run `DAS: Build Hotkey File` from the Command Palette.
-5. Confirm the `Hotkey.htk` output file is created at the configured path.
-6. Re-run the command and confirm the output is byte-for-byte identical.
+- Compile `.das` + `keymap.yaml` into deterministic Hotkey.htk
+- Import Hotkey.htk into editable scripts and a canonical keymap
+- Advisory linting for risky patterns (non-blocking)
+- Dependency navigation (callers/callees, cycles, unused scripts)
+- Optional account placeholder substitution for safer sharing
 
-## Phase 5B Importer Quickstart
+## Requirements
+
+- VS Code 1.107 or newer
+- A workspace containing `.das` scripts and `keymap.yaml` (for build)
+- A Hotkey.htk file (for import)
+
+## Getting Started
+
+### Build Hotkey.htk
+
+1. Open a workspace containing `.das` files.
+2. Create `keymap.yaml` at the workspace root with `id`, `key`, `label`, and `scriptPath`.
+3. Set `dasHotkeyTools.outputPath` in workspace settings.
+4. Run `DAS: Build Hotkey File`.
+5. Confirm the output file is created at the configured path.
+
+### Import Hotkey.htk
 
 1. Open the destination workspace in VS Code.
-2. Run `DAS: Import Hotkey File` from the Command Palette.
-3. Select the source `Hotkey.htk` file and the destination folder.
-4. Choose strict or lenient handling for script length mismatches.
-5. If conflicts are detected, choose overwrite, skip, or cancel.
-6. When prompted, decide whether to run round-trip verification.
-7. Confirm `keymap.yaml` appears at the destination root and `.das` files are in `hotkeys/`.
+2. Run `DAS: Import Hotkey File`.
+3. Select the source Hotkey.htk and destination folder.
+4. Follow prompts for conflict handling and optional round-trip verification.
+5. Confirm `keymap.yaml` appears at the destination root and `.das` files are in `hotkeys/`.
 
-## Compiler Behavior & Limitations
+## Account Placeholders (Optional)
 
-- `keymap.yaml` is the source of truth for hotkey metadata; script contents are
-  never rewritten.
-- During builds, exact `%%LIVE%%` and `%%SIMULATED%%` tokens in script bodies are
-  replaced with user-level account settings when provided.
-- Duplicate ids or key combinations fail compilation with actionable errors.
-- Missing, empty, or malformed scripts fail compilation and no output is written.
-- Unreferenced `.das` files emit warnings but do not block output.
-- Linting is advisory only and never blocks compilation.
-- Script length is computed as the UTF-8 byte length of decoded script text
-  (CRLF normalized) and written in the `Key:Label:Length:Script` segment.
-- Encoded script output is wrapped to match Hotkey.htk physical line breaks and
-  never splits `~HH` tokens across lines.
+You can keep account numbers out of shared scripts by using exact tokens:
 
-## Importer Behavior & Limitations
+- `%%LIVE%%`
+- `%%SIMULATED%%`
 
-- `Hotkey.htk` is parsed using `Key:Label:Length:EncodedScript` records and tolerates line wrapping variations (inline `Key:Label:EncodedScript` records are accepted too).
-- Script bodies are decoded losslessly; CRLF logical newlines are preserved.
-- Key-less records are accepted as script-only entries and retain an empty key in keymap.yaml.
-- Duplicate key combinations (non-empty), empty scripts, or invalid encoding tokens abort the import with context.
-- Script length headers are ignored during import; decoded script content is treated as the source of truth.
-- Imported outputs are written to a `hotkeys/` directory plus a canonical `keymap.yaml`.
+During builds, these tokens are replaced in script bodies when user-level settings are provided. If a setting is missing, the build warns and leaves the token unchanged.
 
-## Phase 3 Editor Experience
+## Installing Hotkey.htk in DAS Trader
 
-1. Open any `.das` file to activate the DAS language mode.
-2. Confirm syntax highlighting for commands, variables, numbers, strings, and comments.
-3. Use Outline or Go to Symbol to navigate ExecHotkey references.
-4. Verify bracket matching and folding on control flow blocks.
-5. Confirm no auto-formatting or whitespace changes occur on save.
+When you manually replace the Hotkey.htk file in DAS Trader, close DAS Trader Pro first, replace the file, then restart the application so the new hotkeys are loaded.
 
-## Phase 4 Linting
+## Commands
 
-1. Open a `.das` file and confirm inline lint diagnostics appear for risky patterns.
-2. Run `DAS: Lint Scripts` to scan the workspace on demand.
-3. Adjust lint settings in workspace `settings.json` and confirm diagnostics update.
-
-## Command Catalog
-
-| Command ID | Title | Purpose |
-| --- | --- | --- |
-| `dasHotkeyTools.buildHotkeyFile` | DAS: Build Hotkey File | Compile `.das` + `keymap.yaml` into `Hotkey.htk`. |
-| `dasHotkeyTools.importHotkeyFile` | DAS: Import Hotkey File | Import `Hotkey.htk` into `hotkeys/` + `keymap.yaml`. |
-| `dasHotkeyTools.lintScripts` | DAS: Lint Scripts | Run advisory linting on `.das` scripts. |
-| `dasHotkeyTools.analyzeDependencies` | DAS: Analyze Dependencies | Build a dependency graph and summarize cycles/unused scripts. |
-| `dasHotkeyTools.showCallers` | DAS: Show Callers | Show scripts that call the current `.das` file. |
-| `dasHotkeyTools.showCallees` | DAS: Show Callees | Show scripts called by the current `.das` file. |
+| Command | Description |
+| --- | --- |
+| DAS: Build Hotkey File | Compile `.das` + `keymap.yaml` into Hotkey.htk |
+| DAS: Import Hotkey File | Import Hotkey.htk into `hotkeys/` + `keymap.yaml` |
+| DAS: Lint Scripts | Run advisory linting for `.das` scripts |
+| DAS: Analyze Dependencies | Build a dependency graph and summarize cycles/unused scripts |
+| DAS: Show Callers | Show scripts that call the current `.das` file |
+| DAS: Show Callees | Show scripts called by the current `.das` file |
 
 ## Settings
 
-Add the settings to your workspace `settings.json`:
+Workspace settings (settings.json):
 
 ```json
 {
@@ -105,12 +83,7 @@ Add the settings to your workspace `settings.json`:
 }
 ```
 
-- `dasHotkeyTools.outputPath` must be a writable file path.
-- `dasHotkeyTools.templateVariables` remains for legacy template workflows and
-  is ignored by the Phase 5 compiler.
-- Relative output paths resolve against the workspace root (default: `output.htk`).
-
-Add account placeholders in **user** settings (not workspace settings):
+User settings (account placeholders):
 
 ```json
 {
@@ -119,31 +92,33 @@ Add account placeholders in **user** settings (not workspace settings):
 }
 ```
 
-- If a placeholder setting is missing, the build warns and leaves the token
-  unchanged in the compiled output.
+Notes:
+- `outputPath` may be absolute or workspace-relative (default: `output.htk`).
+- `templateVariables` is for legacy templates and is ignored by the compiler.
 
-## Packaging & Offline Validation
+## Project Layout
 
-### Build the VSIX
+- `keymap.yaml` at the workspace root defines hotkey metadata.
+- `.das` scripts can live anywhere, referenced by `scriptPath`.
+- Imports place scripts under `hotkeys/` by default.
 
-1. Run `npm install` to ensure dependencies are present.
-2. Run `npm run package` to create a versioned `.vsix` in the repository root.
-3. Confirm the `.vsix` file exists at the repo root.
+## Behavior & Limitations
 
-### Install the .vsix (Windows and macOS)
+- `keymap.yaml` is the source of truth for hotkey metadata.
+- Source scripts are never rewritten during build.
+- Duplicate ids or key combinations fail compilation with actionable errors.
+- Unreferenced `.das` files emit warnings but do not block output.
+- Linting is advisory only and never blocks compilation.
 
-1. Create a fresh VS Code user profile on the target OS.
-2. Install the generated `.vsix` into that profile.
-3. Restart VS Code to ensure activation.
+## Privacy & Offline Use
 
-### Offline Validation (Build + Import)
+All workflows run locally and continue to work offline after installation.
 
-1. Disconnect from the network after the extension is installed.
-2. Run `DAS: Build Hotkey File` and confirm the output file is created.
-3. Run `DAS: Import Hotkey File` and confirm `keymap.yaml` and `hotkeys/` are created.
-4. Reconnect to the network after validation is complete.
+## Safety & Non-Goals
 
-### Uninstall Validation
+This extension does not place trades, connect to DAS Trader APIs, or validate trading outcomes. Users retain responsibility for trading logic and account safety.
 
-1. Uninstall the extension from the profile.
-2. Confirm no residual configuration is required for a clean reinstall.
+## Support
+
+Report issues or request enhancements at: https://github.com/madiver/dasVSide/issues
+
