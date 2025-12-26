@@ -18,16 +18,16 @@
   "contributes": {
     "commands": [
       {
-        "command": "dasHotkeyTools.placeholderCommand",
-        "title": "DAS Hotkey Tools: Placeholder Command"
-      },
-      {
         "command": "dasHotkeyTools.buildHotkeyFile",
         "title": "DAS: Build Hotkey File"
       },
       {
         "command": "dasHotkeyTools.lintScripts",
         "title": "DAS: Lint Scripts"
+      },
+      {
+        "command": "dasHotkeyTools.importHotkeyFile",
+        "title": "DAS: Import Hotkey File"
       }
     ],
     "languages": [
@@ -55,8 +55,8 @@
       "properties": {
         "dasHotkeyTools.outputPath": {
           "type": "string",
-          "default": "",
-          "markdownDescription": "Absolute path where the generated `Hotkey.htk` file will be written. Must be set to a writable location.",
+          "default": "output.htk",
+          "markdownDescription": "Absolute or workspace-relative path where the generated `Hotkey.htk` file will be written. Must be set to a writable location.",
           "scope": "resource"
         },
         "dasHotkeyTools.templateVariables": {
