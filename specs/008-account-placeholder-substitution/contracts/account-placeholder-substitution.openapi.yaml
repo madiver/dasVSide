@@ -1,0 +1,64 @@
+openapi: 3.0.3
+info:
+  title: Account Placeholder Substitution
+  version: 1.0.0
+  description: Build-time placeholder substitution for %%LIVE%% and %%SIMULATED%%.
+paths:
+  /build/placeholder-substitution:
+    post:
+      summary: Apply account placeholder substitution during build
+      description: Replaces exact %%LIVE%% and %%SIMULATED%% tokens in script bodies using user-level settings.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubstitutionRequest'
+      responses:
+        '200':
+          description: Substitution completed (warnings may be returned).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubstitutionResponse'
+components:
+  schemas:
+    SubstitutionRequest:
+      type: object
+      properties:
+        workspaceRoot:
+          type: string
+        outputPath:
+          type: string
+        liveAccountValue:
+          type: string
+          nullable: true
+        simulatedAccountValue:
+          type: string
+          nullable: true
+      required:
+        - workspaceRoot
+        - outputPath
+    SubstitutionWarning:
+      type: object
+      properties:
+        tokenType:
+          type: string
+          enum: [LIVE, SIMULATED]
+        message:
+          type: string
+        affectedScripts:
+          type: array
+          items:
+            type: string
+    SubstitutionResponse:
+      type: object
+      properties:
+        replacedCountLive:
+          type: integer
+        replacedCountSimulated:
+          type: integer
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/SubstitutionWarning'

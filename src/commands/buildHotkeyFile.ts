@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import { loadSettings } from "../config/settings";
 import { compileHotkeys } from "../compiler/compileHotkeys";
 import { getOutputChannel, logOutput, logSuccess } from "./outputChannel";
+import { PLACEHOLDER_LABELS, PLACEHOLDER_TOKENS } from "../compiler/placeholders";
 import {
     ConfigurationError,
     HotkeyToolsError,
@@ -10,6 +11,7 @@ import {
 } from "../compiler/errors";
 import { loadLintConfig } from "../linting/config";
 import { getLintController } from "../linting/diagnostics";
+import { PlaceholderWarning } from "../compiler/types";
 
 const OVERWRITE_OPTION = "Overwrite";
 
@@ -81,6 +83,28 @@ function reportError(error: unknown): void {
     vscode.window.showErrorMessage(userMessage);
 }
 
+function logPlaceholderWarnings(
+    warnings: PlaceholderWarning[] | undefined
+): void {
+    if (!warnings || warnings.length === 0) {
+        return;
+    }
+    const channel = getOutputChannel();
+    for (const warning of warnings) {
+        if (warning.affectedScripts.length === 0) {
+            continue;
+        }
+        const label = PLACEHOLDER_LABELS[warning.placeholder];
+        const token = PLACEHOLDER_TOKENS[warning.placeholder];
+        channel.appendLine(
+            `Affected scripts for ${label} (${token}):`
+        );
+        for (const script of warning.affectedScripts) {
+            channel.appendLine(`- ${script}`);
+        }
+    }
+}
+
 export async function runBuildHotkeyFile(): Promise<void> {
     const channel = getOutputChannel();
     channel.show(true);
@@ -127,6 +151,10 @@ export async function runBuildHotkeyFile(): Promise<void> {
         const result = await compileHotkeys({
             workspaceRoot,
             outputPath: settings.outputPath,
+            placeholderValues: {
+                liveAccount: settings.liveAccount,
+                simulatedAccount: settings.simulatedAccount,
+            },
         });
 
         if (result.warnings.length > 0) {
@@ -139,6 +167,7 @@ export async function runBuildHotkeyFile(): Promise<void> {
                     : warning.message;
                 channel.appendLine(`[WARN] ${details}`);
             });
+            logPlaceholderWarnings(result.placeholderWarnings);
         }
 
         logSuccess(`Hotkey file generated at ${settings.outputPath}`);

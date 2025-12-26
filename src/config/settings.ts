@@ -5,6 +5,8 @@ import { ConfigurationError } from "../compiler/errors";
 export interface ExtensionSettings {
     outputPath: string;
     templateVariables: Record<string, string>;
+    liveAccount?: string;
+    simulatedAccount?: string;
 }
 
 function normalizeTemplateVariables(
@@ -59,6 +61,26 @@ export function loadSettings(workspaceRoot?: string): ExtensionSettings {
     const templateVariables = normalizeTemplateVariables(rawVariables);
 
     const resolvedOutputPath = resolveOutputPath(outputPath, workspaceRoot);
+    const liveAccount = readUserSetting(config, "liveAccount");
+    const simulatedAccount = readUserSetting(config, "simulatedAccount");
 
-    return { outputPath: resolvedOutputPath, templateVariables };
+    return {
+        outputPath: resolvedOutputPath,
+        templateVariables,
+        liveAccount,
+        simulatedAccount,
+    };
+}
+
+function readUserSetting(
+    config: vscode.WorkspaceConfiguration,
+    key: string
+): string | undefined {
+    const inspected = config.inspect<string>(key);
+    const raw = inspected?.globalValue ?? inspected?.defaultValue ?? "";
+    if (typeof raw !== "string") {
+        return undefined;
+    }
+    const trimmed = raw.trim();
+    return trimmed ? trimmed : undefined;
 }

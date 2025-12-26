@@ -6,4 +6,21 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-- Initial release
+### Added
+- TBD
+
+### Changed
+- TBD
+
+### Fixed
+- TBD
+
+### Breaking
+- None
+
+## [0.0.1] - 2025-12-26
+### Added
+- Initial release of DAS Hotkey Tools core workflows.
+
+### Breaking
+- None

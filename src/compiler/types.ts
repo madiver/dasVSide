@@ -22,6 +22,11 @@ export interface CompileWarning {
     key?: string;
 }
 
+export interface PlaceholderWarning {
+    placeholder: "live" | "simulated";
+    affectedScripts: string[];
+}
+
 export interface CompileErrorInfo {
     code: string;
     message: string;
@@ -35,4 +40,5 @@ export interface CompileResult {
     warnings: CompileWarning[];
     errors: CompileErrorInfo[];
     outputPath?: string;
+    placeholderWarnings?: PlaceholderWarning[];
 }
