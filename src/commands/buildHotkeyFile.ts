@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { promises as fs } from "fs";
+import path from "path";
 import { loadSettings } from "../config/settings";
 import { compileHotkeys } from "../compiler/compileHotkeys";
 import { getOutputChannel, logOutput, logSuccess } from "./outputChannel";
@@ -14,6 +15,26 @@ import { getLintController } from "../linting/diagnostics";
 import { PlaceholderWarning } from "../compiler/types";
 
 const OVERWRITE_OPTION = "Overwrite";
+
+function formatLocalTimestamp(date: Date): string {
+    const pad = (value: number): string => value.toString().padStart(2, "0");
+    return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate()),
+    ].join("") + `-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+function appendTimestampToPath(outputPath: string, date = new Date()): string {
+    const extension = path.extname(outputPath);
+    const baseName = path.basename(outputPath, extension);
+    const directory = path.dirname(outputPath);
+    const timestamp = formatLocalTimestamp(date);
+    const filename = extension
+        ? `${baseName}-${timestamp}${extension}`
+        : `${baseName}-${timestamp}`;
+    return path.join(directory, filename);
+}
 
 function getWorkspaceRoot(): string {
     const folders = vscode.workspace.workspaceFolders;
@@ -114,6 +135,13 @@ export async function runBuildHotkeyFile(): Promise<void> {
         logOutput("Loading settings.");
         const workspaceRoot = getWorkspaceRoot();
         const settings = loadSettings(workspaceRoot);
+        const outputPath = settings.appendTimestampToOutput
+            ? appendTimestampToPath(settings.outputPath)
+            : settings.outputPath;
+
+        if (outputPath !== settings.outputPath) {
+            logOutput(`Using timestamped output path: ${outputPath}`);
+        }
 
         const lintConfig = loadLintConfig();
         if (lintConfig.enabled && lintConfig.lintOnBuild) {
@@ -138,7 +166,7 @@ export async function runBuildHotkeyFile(): Promise<void> {
         }
 
         logOutput("Checking output path for overwrite.");
-        const shouldWrite = await confirmOverwrite(settings.outputPath);
+        const shouldWrite = await confirmOverwrite(outputPath);
         if (!shouldWrite) {
             logOutput("Build canceled by user.");
             vscode.window.showInformationMessage(
@@ -150,7 +178,7 @@ export async function runBuildHotkeyFile(): Promise<void> {
         logOutput("Compiling Hotkey file.");
         const result = await compileHotkeys({
             workspaceRoot,
-            outputPath: settings.outputPath,
+            outputPath,
             placeholderValues: {
                 liveAccount: settings.liveAccount,
                 simulatedAccount: settings.simulatedAccount,
@@ -170,9 +198,9 @@ export async function runBuildHotkeyFile(): Promise<void> {
             logPlaceholderWarnings(result.placeholderWarnings);
         }
 
-        logSuccess(`Hotkey file generated at ${settings.outputPath}`);
+        logSuccess(`Hotkey file generated at ${outputPath}`);
         vscode.window.showInformationMessage(
-            `Hotkey file generated: ${settings.outputPath}`
+            `Hotkey file generated: ${outputPath}`
         );
     } catch (error) {
         reportError(error);

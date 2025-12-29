@@ -92,6 +92,7 @@ Use the Settings UI:
 2. Search for **DAS Hotkey Tools**.
 3. Set workspace settings:
    - **Output Path**
+   - **Append Timestamp To Output** (optional)
    - **Linting: Enabled**
    - **Linting: Lint On Build** (optional)
 4. Set user settings (placeholders):
@@ -105,7 +106,7 @@ Workspace settings:
 ```json
 {
   "dasHotkeyTools.outputPath": "C:\\temp\\Hotkey.htk",
-  "dasHotkeyTools.templateVariables": {},
+  "dasHotkeyTools.appendTimestampToOutput": false,
   "dasHotkeyTools.linting.enabled": true,
   "dasHotkeyTools.linting.debounceMs": 400,
   "dasHotkeyTools.linting.maxFiles": 200,
@@ -126,7 +127,7 @@ User settings (account placeholders):
 
 Notes:
 - `outputPath` may be absolute or workspace-relative (default: `output.htk`).
-- `templateVariables` is for legacy templates and is ignored by the compiler.
+- `appendTimestampToOutput` appends a local timestamp in `YYYYMMDD-HHmmss` format before the file extension.
 
 ## Project Layout
 

@@ -259,7 +259,6 @@ README.md
   - **Default**: none (must be set)
   - **Usage**: Output Hotkey.htk location
   - **Constraints**: absolute path allowed; must be writable
-- `dasHotkeyTools.templateVariables.*` (string map)
   - **Default**: per template variable
   - **Usage**: Placeholder values for templates
   - **Constraints**: must not introduce colons where disallowed
