@@ -23,6 +23,7 @@ vsc-extension-quickstart.md
 **/*.das
 keymap.yaml
 ._*
+**/._*
 !out/**
 !syntaxes/**
 !language-configuration.json

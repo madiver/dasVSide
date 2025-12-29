@@ -93,7 +93,6 @@ As a user, I want clear feedback about build results and errors so I can fix iss
 ### Configuration Keys
 
 - **dasHotkeyTools.outputPath** (string, required): Output Hotkey.htk location; must be writable.
-- **dasHotkeyTools.templateVariables.*** (string map, optional): Placeholder values; MUST NOT introduce colons in hotkey names.
 
 ### Scope and Non-Goals
 

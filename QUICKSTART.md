@@ -24,6 +24,7 @@ Use the Settings UI:
 2. Search for **DAS Hotkey Tools**.
 3. Set workspace settings:
    - **Output Path**
+   - **Append Timestamp To Output** (optional)
    - **Linting: Enabled**
    - **Linting: Lint On Build** (optional)
 4. Set user settings (placeholders):
@@ -37,6 +38,7 @@ Workspace settings:
 ```json
 {
   "dasHotkeyTools.outputPath": "C:\\temp\\Hotkey.htk",
+  "dasHotkeyTools.appendTimestampToOutput": false,
   "dasHotkeyTools.linting.enabled": true,
   "dasHotkeyTools.linting.lintOnBuild": false
 }

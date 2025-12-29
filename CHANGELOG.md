@@ -2,6 +2,12 @@
 
 All notable changes to the "das-hotkey-tools" extension will be documented in this file.
 
+## [0.0.2] - 2025-12-26
+### Added
+- Optional setting to append a local timestamp to Hotkey build output filenames.
+### Removed
+- Unused `dasHotkeyTools.templateVariables` setting.
+
 ## [0.0.1] - 2025-12-26
 ### Added
 - Build Hotkey.htk from `.das` scripts and `keymap.yaml`.
