@@ -48,6 +48,7 @@ You can keep account numbers out of shared scripts by using exact tokens:
 - `%%SIMULATED%%`
 
 During builds, these tokens are replaced in script bodies when user-level settings are provided. If a setting is missing, the build warns and leaves the token unchanged.
+To prevent invalid output (and potential DAS Trader crashes), enable `dasHotkeyTools.placeholders.failOnMissing` so builds fail when placeholders are unresolved.
 
 ## Ignore Scripts (Optional)
 
@@ -93,6 +94,7 @@ Use the Settings UI:
 3. Set workspace settings:
    - **Output Path**
    - **Append Timestamp To Output** (optional)
+   - **Placeholders: Fail On Missing** (recommended)
    - **Linting: Enabled**
    - **Linting: Lint On Build** (optional)
 4. Set user settings (placeholders):
@@ -107,6 +109,7 @@ Workspace settings:
 {
   "dasHotkeyTools.outputPath": "C:\\temp\\Hotkey.htk",
   "dasHotkeyTools.appendTimestampToOutput": false,
+  "dasHotkeyTools.placeholders.failOnMissing": true,
   "dasHotkeyTools.linting.enabled": true,
   "dasHotkeyTools.linting.debounceMs": 400,
   "dasHotkeyTools.linting.maxFiles": 200,

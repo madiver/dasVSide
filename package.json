@@ -4,7 +4,7 @@
   "displayName": "DAS Hotkey Tools",
   "description": "Import, edit, lint, and compile DAS Trader hotkeys with .das scripts and keymap.yaml.",
   "icon": "images/icon.png",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "repository": {
     "type": "git",
     "url": "https://github.com/mark/dasVSide.git"
@@ -123,6 +123,13 @@
           "order": 21,
           "markdownDescription": "User-level Simulated Account identifier used to replace `%%SIMULATED%%` tokens during builds.",
           "scope": "application"
+        },
+        "dasHotkeyTools.placeholders.failOnMissing": {
+          "type": "boolean",
+          "default": false,
+          "order": 22,
+          "markdownDescription": "Fail builds when `%%LIVE%%` or `%%SIMULATED%%` tokens are present but the corresponding account setting is missing.",
+          "scope": "resource"
         },
         "dasHotkeyTools.linting.enabled": {
           "type": "boolean",

@@ -7,6 +7,7 @@ export interface ExtensionSettings {
     appendTimestampToOutput: boolean;
     liveAccount?: string;
     simulatedAccount?: string;
+    failOnMissingPlaceholders: boolean;
 }
 
 function resolveOutputPath(
@@ -39,12 +40,17 @@ export function loadSettings(workspaceRoot?: string): ExtensionSettings {
     const resolvedOutputPath = resolveOutputPath(outputPath, workspaceRoot);
     const liveAccount = readUserSetting(config, "liveAccount");
     const simulatedAccount = readUserSetting(config, "simulatedAccount");
+    const failOnMissingPlaceholders = config.get<boolean>(
+        "placeholders.failOnMissing",
+        false
+    );
 
     return {
         outputPath: resolvedOutputPath,
         appendTimestampToOutput,
         liveAccount,
         simulatedAccount,
+        failOnMissingPlaceholders,
     };
 }
 

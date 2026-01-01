@@ -25,11 +25,17 @@ Use the Settings UI:
 3. Set workspace settings:
    - **Output Path**
    - **Append Timestamp To Output** (optional)
+   - **Placeholders: Fail On Missing** (recommended)
    - **Linting: Enabled**
    - **Linting: Lint On Build** (optional)
 4. Set user settings (placeholders):
    - **Live Account**
    - **Simulated Account**
+
+These values replace the `%%LIVE%%` and `%%SIMULATED%%` placeholders used in scripts.
+Set both before building or importing; leaving either blank can produce invalid
+Hotkey output and may crash DAS Trader.
+Use **Placeholders: Fail On Missing** to block builds when placeholders are still unresolved.
 
 If you prefer editing `settings.json` directly, use:
 
@@ -39,6 +45,7 @@ Workspace settings:
 {
   "dasHotkeyTools.outputPath": "C:\\temp\\Hotkey.htk",
   "dasHotkeyTools.appendTimestampToOutput": false,
+  "dasHotkeyTools.placeholders.failOnMissing": true,
   "dasHotkeyTools.linting.enabled": true,
   "dasHotkeyTools.linting.lintOnBuild": false
 }
