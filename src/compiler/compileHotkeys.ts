@@ -1,4 +1,8 @@
-import { CompileResult, CompileWarning } from "./types";
+import {
+    CompileResult,
+    CompileWarning,
+    PlaceholderWarning,
+} from "./types";
 import { discoverWorkspaceInputs } from "./discovery";
 import { parseKeymapFile } from "./keymap";
 import { loadScriptFiles } from "./loader";
@@ -6,8 +10,10 @@ import { buildHotkeyModels } from "./model";
 import { aggregateHotkeys } from "./aggregate";
 import { renderHotkeys } from "./renderer";
 import { writeHotkeyFile } from "./writer";
-import { KeymapError } from "./errors";
+import { KeymapError, ValidationError } from "./errors";
 import {
+    PLACEHOLDER_LABELS,
+    PLACEHOLDER_TOKENS,
     PlaceholderValues,
     substitutePlaceholders,
 } from "./placeholders";
@@ -18,6 +24,7 @@ export interface CompileOptions {
     workspaceRoot: string;
     outputPath: string;
     placeholderValues?: PlaceholderValues;
+    failOnMissingPlaceholders?: boolean;
 }
 
 export async function compileHotkeys(
@@ -55,6 +62,11 @@ export async function compileHotkeys(
         options.placeholderValues ?? {},
         placeholderTracker
     );
+    const placeholderWarnings = placeholderTracker.buildPlaceholderWarnings();
+    assertPlaceholdersSatisfied(
+        placeholderWarnings,
+        options.failOnMissingPlaceholders
+    );
     const warnings = collectWarnings(
         discovery.warnings,
         filteredEntries,
@@ -73,7 +85,7 @@ export async function compileHotkeys(
         warnings,
         errors: [],
         outputPath: options.outputPath,
-        placeholderWarnings: placeholderTracker.buildPlaceholderWarnings(),
+        placeholderWarnings,
     };
 }
 
@@ -187,4 +199,37 @@ function applyPlaceholderSubstitution(
         }
     }
     return substituted;
+}
+
+function assertPlaceholdersSatisfied(
+    placeholderWarnings: PlaceholderWarning[],
+    failOnMissing: boolean | undefined
+): void {
+    if (!failOnMissing || placeholderWarnings.length === 0) {
+        return;
+    }
+    const missing = placeholderWarnings
+        .map(
+            (warning) =>
+                `${PLACEHOLDER_LABELS[warning.placeholder]} ` +
+                `(${PLACEHOLDER_TOKENS[warning.placeholder]})`
+        )
+        .join(", ");
+    const affectedScripts = Array.from(
+        new Set(
+            placeholderWarnings.flatMap(
+                (warning) => warning.affectedScripts
+            )
+        )
+    ).sort();
+    const detailsParts = [`Missing settings for: ${missing}.`];
+    if (affectedScripts.length > 0) {
+        detailsParts.push(
+            `Affected scripts: ${affectedScripts.join(", ")}.`
+        );
+    }
+    throw new ValidationError(
+        "Account placeholder settings are required for this build.",
+        detailsParts.join(" ")
+    );
 }

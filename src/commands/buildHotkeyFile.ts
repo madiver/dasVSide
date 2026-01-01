@@ -183,6 +183,7 @@ export async function runBuildHotkeyFile(): Promise<void> {
                 liveAccount: settings.liveAccount,
                 simulatedAccount: settings.simulatedAccount,
             },
+            failOnMissingPlaceholders: settings.failOnMissingPlaceholders,
         });
 
         if (result.warnings.length > 0) {

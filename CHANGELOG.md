@@ -2,6 +2,12 @@
 
 All notable changes to the "das-hotkey-tools" extension will be documented in this file.
 
+## [0.0.3] - 2026-01-01
+### Added
+- Workspace setting to fail builds when `%%LIVE%%` or `%%SIMULATED%%` placeholders are unresolved.
+### Changed
+- Documented placeholder requirements and recommended fail-on-missing setting in Quickstart and README.
+
 ## [0.0.2] - 2025-12-26
 ### Added
 - Optional setting to append a local timestamp to Hotkey build output filenames.
