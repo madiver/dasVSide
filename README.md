@@ -2,7 +2,7 @@ Create, import, and manage DAS Trader hotkeys with a clean, version-friendly wor
 
 ## Overview
 
-DAS Hotkey Tools helps active DAS Trader users manage complex hotkeys without editing Hotkey.htk by hand. It exists to address limitations of the built-in DAS Trader editor when managing large, complex script libraries. You can import legacy Hotkey.htk files, edit scripts with language support and linting, analyze dependencies, and rebuild output safely and deterministically.
+DAS Trader Hotkey Tools helps active DAS Trader users manage complex hotkeys without editing Hotkey.htk by hand. It exists to address limitations of the built-in DAS Trader editor when managing large, complex script libraries. You can import legacy Hotkey.htk files, edit scripts with language support and linting, analyze dependencies, and rebuild output safely and deterministically.
 
 ## Risk Disclaimer
 
@@ -23,6 +23,13 @@ This extension is provided "as is" and is used at your own risk. It does not gua
 - A Hotkey.htk file (for import)
 
 ## Getting Started
+
+### Example Workspace
+
+If you want a ready-to-run sample, open `examples/sample-workspace` from this repository. It includes:
+
+- `keymap.yaml` with a single example entry
+- `hotkeys/example.das`, a no-op script that returns immediately
 
 ### Build Hotkey.htk
 
@@ -90,7 +97,7 @@ When you manually replace the Hotkey.htk file in DAS Trader, close DAS Trader Pr
 Use the Settings UI:
 
 1. Open Settings (Ctrl+, / Cmd+,).
-2. Search for **DAS Hotkey Tools**.
+2. Search for **DAS Trader Hotkey Tools**.
 3. Set workspace settings:
    - **Output Path**
    - **Append Timestamp To Output** (optional)
@@ -153,6 +160,10 @@ All workflows run locally and continue to work offline after installation.
 ## Safety & Non-Goals
 
 This extension does not place trades, connect to DAS Trader APIs, or validate trading outcomes. Users retain responsibility for trading logic and account safety.
+
+## License
+
+Licensed under the Apache License, Version 2.0. See `LICENSE` and `NOTICE`.
 
 ## Support
 

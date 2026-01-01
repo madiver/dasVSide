@@ -1,4 +1,4 @@
-# DAS Hotkey Tools Extension Quickstart
+# DAS Trader Hotkey Tools Extension Quickstart
 
 ## What's in the folder
 
