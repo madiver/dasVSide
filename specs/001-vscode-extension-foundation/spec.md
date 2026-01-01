@@ -3,7 +3,7 @@
 **Feature Branch**: `001-vscode-extension-foundation`  
 **Created**: 2025-12-21  
 **Status**: Draft  
-**Input**: User description: "Phase 0 foundation for DAS Hotkey Tools: scaffold VS Code extension with TypeScript, placeholder command, packaging and install validation, stable repo layout, minimal README; no DAS functionality."
+**Input**: User description: "Phase 0 foundation for DAS Trader Hotkey Tools: scaffold VS Code extension with TypeScript, placeholder command, packaging and install validation, stable repo layout, minimal README; no DAS functionality."
 
 ## Clarifications
 

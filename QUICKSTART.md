@@ -1,12 +1,14 @@
 # QUICKSTART
 
-Quick steps for testers to install and verify DAS Hotkey Tools in VS Code.
+Quick steps for testers to install and verify DAS Trader Hotkey Tools in VS Code.
 
 ## Prerequisites
 
 - VS Code 1.107 or newer
-- The `.vsix` package for DAS Hotkey Tools
+- The `.vsix` package for DAS Trader Hotkey Tools
 - A workspace with `.das` scripts and `keymap.yaml` (for build), or a Hotkey.htk file (for import)
+
+If you need a sample workspace, open `examples/sample-workspace` from this repository. It includes a minimal `keymap.yaml` and a no-op script.
 
 ## Install the Extension (VSIX)
 
@@ -21,7 +23,7 @@ Quick steps for testers to install and verify DAS Hotkey Tools in VS Code.
 Use the Settings UI:
 
 1. Open Settings (Ctrl+, / Cmd+,).
-2. Search for **DAS Hotkey Tools**.
+2. Search for **DAS Trader Hotkey Tools**.
 3. Set workspace settings:
    - **Output Path**
    - **Append Timestamp To Output** (optional)

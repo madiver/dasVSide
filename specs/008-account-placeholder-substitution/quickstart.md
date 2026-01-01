@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - VS Code installed
-- DAS Hotkey Tools extension installed
+- DAS Trader Hotkey Tools extension installed
 - Workspace with `.das` files and `keymap.yaml`
 
 ## Steps

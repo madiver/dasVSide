@@ -3,7 +3,7 @@
 **Feature Branch**: `002-core-user-workflow`  
 **Created**: 2025-12-21  
 **Status**: Draft  
-**Input**: User description: "Phase 1 core functionality and user value for DAS Hotkey Tools extension, including primary workflow, commands, configuration, core logic, feedback, error handling, validation, and packaging continuity."
+**Input**: User description: "Phase 1 core functionality and user value for DAS Trader Hotkey Tools extension, including primary workflow, commands, configuration, core logic, feedback, error handling, validation, and packaging continuity."
 
 ## Clarifications
 

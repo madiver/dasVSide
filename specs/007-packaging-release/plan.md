@@ -3,7 +3,7 @@
 **Input**: Feature specification from /specs/007-packaging-release/spec.md
 
 ## Summary
-Prepare the DAS Hotkey Tools extension for public release by hardening packaging, offline readiness, documentation, command UX consistency, and release hygiene without changing core functionality or compiled outputs.
+Prepare the DAS Trader Hotkey Tools extension for public release by hardening packaging, offline readiness, documentation, command UX consistency, and release hygiene without changing core functionality or compiled outputs.
 
 ## Technical Context
 **Language/Version**: TypeScript (VS Code extension standard)

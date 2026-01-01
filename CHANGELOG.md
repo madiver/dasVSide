@@ -2,6 +2,14 @@
 
 All notable changes to the "das-hotkey-tools" extension will be documented in this file.
 
+## [0.0.4] - 2026-01-01
+### Added
+- Example workspace under `examples/sample-workspace`.
+- NOTICE file for Apache License 2.0 attribution.
+### Changed
+- Extension display name updated to DAS Trader Hotkey Tools.
+- License updated to Apache-2.0.
+
 ## [0.0.3] - 2026-01-01
 ### Added
 - Workspace setting to fail builds when `%%LIVE%%` or `%%SIMULATED%%` placeholders are unresolved.

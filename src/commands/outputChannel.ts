@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-const CHANNEL_NAME = "DAS Hotkey Tools";
+const CHANNEL_NAME = "DAS Trader Hotkey Tools";
 let sharedChannel: vscode.OutputChannel | undefined;
 
 export interface OutputContext {
