@@ -21,6 +21,7 @@ This extension is provided "as is" and is used at your own risk. It does not gua
 - VS Code 1.107 or newer
 - A workspace containing `.das` scripts and `keymap.yaml` (for build)
 - A Hotkey.htk file (for import)
+- Example .das script repository: https://github.com/madiver/DASTraderScripts
 
 ## Getting Started
 
