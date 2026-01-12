@@ -4,6 +4,8 @@ Create, import, and manage DAS Trader hotkeys with a clean, version-friendly wor
 
 DAS Trader Hotkey Tools helps active DAS Trader users manage complex hotkeys without editing Hotkey.htk by hand. It exists to address limitations of the built-in DAS Trader editor when managing large, complex script libraries. You can import legacy Hotkey.htk files, edit scripts with language support and linting, analyze dependencies, and rebuild output safely and deterministically.
 
+Serious about day trading? You can find me on Discord here:  https://discord.gg/UvZYTEGrvh
+
 ## Risk Disclaimer
 
 This extension is provided "as is" and is used at your own risk. It does not guarantee trading outcomes, and the author is not responsible for any losses or damages resulting from its use. Users are solely responsible for reviewing and validating all hotkeys and scripts before use in DAS Trader.
