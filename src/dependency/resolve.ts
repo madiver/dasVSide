@@ -16,7 +16,7 @@ function normalizePath(input: string): string {
 }
 
 export function normalizeRelativePath(input: string): string {
-    return normalizePath(input);
+    return normalizePath(input).replace(/^\.\/+/, "");
 }
 
 export function normalizeKey(value: string): string {
@@ -70,11 +70,14 @@ export function resolveScriptPath(
         return { warning: "Empty script path reference." };
     }
 
-    const normalized = normalizePath(trimmed);
+    const isAbsolute = path.isAbsolute(trimmed);
+    const normalized = isAbsolute
+        ? normalizePath(trimmed)
+        : normalizeRelativePath(trimmed);
     const noExt = normalized.replace(/\.das$/i, "");
     const matches: string[] = [];
 
-    if (path.isAbsolute(trimmed)) {
+    if (isAbsolute) {
         const full = index.byFullPath.get(normalized);
         if (full) {
             matches.push(full);

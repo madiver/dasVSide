@@ -15,6 +15,24 @@ function normalizePath(input: string): string {
     return input.replace(/\\/g, "/").toLowerCase();
 }
 
+function normalizeRelativePath(input: string): string {
+    return normalizePath(input).replace(/^\.\/+/, "");
+}
+
+function assertValidLabel(
+    label: string,
+    index: number,
+    context?: { id?: string; key?: string }
+): void {
+    if (/[:\r\n]/.test(label)) {
+        throw new KeymapError(
+            "Keymap entry label contains invalid characters.",
+            `Entry ${index + 1} label must not include ":" or line breaks.`,
+            { id: context?.id, key: context?.key }
+        );
+    }
+}
+
 function extractEntries(data: unknown): unknown[] {
     if (Array.isArray(data)) {
         return data;
@@ -66,7 +84,10 @@ function resolveScriptPath(
     options: KeymapParseOptions,
     context?: { id?: string; key?: string }
 ): string {
-    const normalizedTarget = normalizePath(scriptPath);
+    const isAbsolute = path.isAbsolute(scriptPath);
+    const normalizedTarget = isAbsolute
+        ? normalizePath(scriptPath)
+        : normalizeRelativePath(scriptPath);
     const targetWithoutExt = normalizedTarget.replace(/\.das$/i, "");
 
     const candidates = options.scriptPaths.map((fullPath) => {
@@ -84,7 +105,7 @@ function resolveScriptPath(
 
     const matches: string[] = [];
 
-    if (path.isAbsolute(scriptPath)) {
+    if (isAbsolute) {
         for (const candidate of candidates) {
             if (candidate.fullNormalized === normalizedTarget) {
                 matches.push(candidate.fullPath);
@@ -207,6 +228,7 @@ export async function parseKeymapFile(
             index,
             context
         );
+        assertValidLabel(label, index, context);
         const scriptPath = readStringField(
             record,
             ["scriptPath", "script"],

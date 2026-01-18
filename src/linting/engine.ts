@@ -1,5 +1,7 @@
 import * as path from "path";
+import { parse } from "yaml";
 import { buildScanContext } from "./tokenizer";
+import { findExecHotkeyRefs } from "../dependency/callPatterns";
 import {
     ExecHotkeyRef,
     LintConfig,
@@ -12,36 +14,63 @@ import {
 } from "./types";
 import { getLintRules } from "./rules";
 
-const EXEC_HOTKEY_PATTERN =
-    /ExecHotkey\s*\(\s*(?:"([^"]+)"|([A-Za-z0-9_-]+))\s*\)/gi;
 const KEYMAP_DAS_PATTERN = /([A-Za-z0-9_-]+)\.das/gi;
-const KEYMAP_SCRIPT_PATTERN = /script\s*:\s*([A-Za-z0-9_-]+)/gi;
+const KEYMAP_SCRIPT_PATTERN = /script(?:Path)?\s*:\s*["']?([^"'#\r\n]+)["']?/gi;
+
+type KeymapEntryRecord = Record<string, unknown>;
 
 function normalizeName(name: string): string {
     return name.trim().toLowerCase();
 }
 
-function extractExecHotkeyRefs(code: string): ExecHotkeyRef[] {
-    const refs: ExecHotkeyRef[] = [];
-    for (const match of code.matchAll(EXEC_HOTKEY_PATTERN)) {
-        if (typeof match.index !== "number") {
-            continue;
-        }
-        const target = (match[1] ?? match[2] ?? "").trim();
-        if (!target) {
-            continue;
-        }
-        const matchText = match[0];
-        const targetIndex = matchText.indexOf(target);
-        const offset =
-            match.index + (targetIndex >= 0 ? targetIndex : 0);
-        refs.push({
-            target,
-            offset,
-            length: target.length,
-        });
+function extractExecHotkeyRefs(text: string): ExecHotkeyRef[] {
+    return findExecHotkeyRefs(text).map((ref) => ({
+        target: ref.target,
+        offset: ref.offset,
+        length: ref.length,
+    }));
+}
+
+function extractEntries(data: unknown): unknown[] {
+    if (Array.isArray(data)) {
+        return data;
     }
-    return refs;
+    if (data && typeof data === "object") {
+        const record = data as Record<string, unknown>;
+        if (Array.isArray(record.entries)) {
+            return record.entries;
+        }
+    }
+    return [];
+}
+
+function readStringField(
+    entry: KeymapEntryRecord,
+    keys: string[]
+): string | undefined {
+    for (const key of keys) {
+        const value = entry[key];
+        if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (trimmed) {
+                return trimmed;
+            }
+        }
+        if (value === null && keys.includes(key)) {
+            return "";
+        }
+    }
+    return undefined;
+}
+
+function normalizeScriptName(scriptPath: string): string | undefined {
+    if (!scriptPath) {
+        return undefined;
+    }
+    const base = path.basename(scriptPath);
+    const withoutExt = base.replace(/\.das$/i, "");
+    const normalized = normalizeName(withoutExt);
+    return normalized || undefined;
 }
 
 function parseKeymapReferences(text: string): {
@@ -50,20 +79,46 @@ function parseKeymapReferences(text: string): {
 } {
     const seen = new Map<string, number>();
 
-    for (const match of text.matchAll(KEYMAP_DAS_PATTERN)) {
-        const scriptName = normalizeName(match[1] ?? "");
-        if (!scriptName) {
-            continue;
+    const trimmedText = text.trim();
+    if (trimmedText) {
+        try {
+            const parsed = parse(trimmedText);
+            const entries = extractEntries(parsed);
+            for (const entry of entries) {
+                if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+                    continue;
+                }
+                const record = entry as KeymapEntryRecord;
+                const scriptPath =
+                    readStringField(record, ["scriptPath", "script"]) ?? "";
+                const scriptName = normalizeScriptName(scriptPath);
+                if (!scriptName) {
+                    continue;
+                }
+                seen.set(scriptName, (seen.get(scriptName) ?? 0) + 1);
+            }
+        } catch {
+            // Fall back to regex extraction below.
         }
-        seen.set(scriptName, (seen.get(scriptName) ?? 0) + 1);
     }
 
-    for (const match of text.matchAll(KEYMAP_SCRIPT_PATTERN)) {
-        const scriptName = normalizeName(match[1] ?? "");
-        if (!scriptName) {
-            continue;
+    if (seen.size === 0) {
+        for (const match of text.matchAll(KEYMAP_DAS_PATTERN)) {
+            const scriptName = normalizeName(match[1] ?? "");
+            if (!scriptName) {
+                continue;
+            }
+            seen.set(scriptName, (seen.get(scriptName) ?? 0) + 1);
         }
-        seen.set(scriptName, (seen.get(scriptName) ?? 0) + 1);
+
+        for (const match of text.matchAll(KEYMAP_SCRIPT_PATTERN)) {
+            const scriptPath = (match[1] ?? "").trim();
+            const scriptName = normalizeScriptName(scriptPath);
+            if (!scriptName) {
+                continue;
+            }
+            seen.set(scriptName, (seen.get(scriptName) ?? 0) + 1);
+        }
     }
 
     const refs = new Set<string>();
@@ -91,7 +146,7 @@ export function buildScriptFile(
 ): ScriptFile {
     const scriptName = path.basename(filePath, path.extname(filePath));
     const scan = buildScanContext(content);
-    const execHotkeyRefs = extractExecHotkeyRefs(scan.code);
+    const execHotkeyRefs = extractExecHotkeyRefs(scan.text);
     return {
         filePath,
         scriptName,
@@ -201,13 +256,6 @@ export function lintWorkspace(
     return findings;
 }
 
-export function findExecHotkeyTargets(code: string): string[] {
-    const targets: string[] = [];
-    for (const match of code.matchAll(EXEC_HOTKEY_PATTERN)) {
-        const target = (match[1] ?? match[2] ?? "").trim();
-        if (target) {
-            targets.push(target);
-        }
-    }
-    return targets;
+export function findExecHotkeyTargets(text: string): string[] {
+    return extractExecHotkeyRefs(text).map((ref) => ref.target);
 }

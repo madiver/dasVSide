@@ -5,7 +5,7 @@
   "description": "Import, edit, lint, and compile DAS Trader hotkeys with .das scripts and keymap.yaml.",
   "license": "Apache-2.0",
   "icon": "images/icon.png",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "repository": {
     "type": "git",
     "url": "https://github.com/mark/dasVSide.git"

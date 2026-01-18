@@ -2,6 +2,13 @@
 
 All notable changes to the "das-hotkey-tools" extension will be documented in this file.
 
+## [0.0.5] - 2026-01-18
+### Changed
+- ExecHotkey linting now detects quoted targets while ignoring comments/strings.
+- Script path resolution now accepts "./" prefixed keymap entries in compile and dependency analysis.
+- Linting keymap reference extraction now prefers YAML parsing and handles scriptPath values more reliably.
+- Keymap labels are validated to reject ":" or line breaks before rendering hotkey headers.
+
 ## [0.0.4] - 2026-01-01
 ### Added
 - Example workspace under `examples/sample-workspace`.
